@@ -1,0 +1,20 @@
+{
+  "name": "camluk-whatsapp-commerce",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WhatsApp-first business automation platform for Camluk Technologies.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=web",
+    "dev:api": "npm run dev --workspace=api",
+    "build": "npm run build --workspaces",
+    "lint": "npm run lint --workspaces",
+    "test": "npm run test --workspaces"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
