@@ -8,12 +8,12 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run dev --workspace=web",
-    "dev:api": "npm run dev --workspace=api",
-    "build": "npm run build --workspaces",
-    "lint": "npm run lint --workspaces",
-    "test": "npm run test --workspaces"
-  },
+  "dev": "npm run dev --workspace=web",
+  "dev:api": "npm run dev --workspace=@camluk/api",
+  "build": "npm run build --workspaces",
+  "lint": "npm run lint --workspaces",
+  "test": "npm run test --workspaces"
+},
   "engines": {
     "node": ">=20"
   }
