@@ -1,180 +1,126 @@
 import { supabase } from "../lib/supabase.js";
 
-export async function getServices() {
-  const { data, error } = await supabase
-    .from("services")
-    .select(`
-      id,
-      name,
-      category,
-      description,
-      active,
-      created_at,
-      updated_at
-    `)
-    .order("created_at", {
-      ascending: true
-    });
-
-  if (error) {
-    throw new Error(
-      `Failed to load services: ${error.message}`
-    );
-  }
-
-  return data;
+export interface Service {
+  id: string;
+  business_id: string;
+  name: string;
+  category: string;
+  description: string | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
-export async function getServiceById(id: string) {
-  const { data, error } = await supabase
-    .from("services")
-    .select(`
-      id,
-      name,
-      category,
-      description,
-      active,
-      created_at,
-      updated_at
-    `)
-    .eq("id", id)
-    .single();
-
-  if (error) {
-    if (error.code === "PGRST116") {
-      return null;
-    }
-
-    throw new Error(
-      `Failed to load service: ${error.message}`
-    );
-  }
-
-  return data;
-}
-
-type CreateServiceInput = {
+export interface CreateServiceInput {
   businessId: string;
   name: string;
   category: string;
   description?: string;
   active?: boolean;
-};
+}
+
+export interface UpdateServiceInput {
+  name?: string;
+  category?: string;
+  description?: string | null;
+  active?: boolean;
+}
+
+export async function getServices(
+  businessId: string
+): Promise<Service[]> {
+  const { data, error } = await supabase
+    .from("services")
+    .select("*")
+    .eq("business_id", businessId)
+    .order("created_at", {
+      ascending: false
+    });
+
+  if (error) {
+    throw error;
+  }
+
+  return data ?? [];
+}
+
+export async function getServiceById(
+  id: string,
+  businessId: string
+): Promise<Service | null> {
+  const { data, error } = await supabase
+    .from("services")
+    .select("*")
+    .eq("id", id)
+    .eq("business_id", businessId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
 
 export async function createService(
   input: CreateServiceInput
-) {
-  const {
-    businessId,
-    name,
-    category,
-    description = "",
-    active = true
-  } = input;
-
+): Promise<Service> {
   const { data, error } = await supabase
     .from("services")
     .insert({
-      business_id: businessId,
-      name,
-      category,
-      description,
-      active
+      business_id: input.businessId,
+      name: input.name,
+      category: input.category,
+      description: input.description ?? null,
+      active: input.active ?? true
     })
-    .select(`
-      id,
-      business_id,
-      name,
-      category,
-      description,
-      active,
-      created_at,
-      updated_at
-    `)
+    .select("*")
     .single();
 
   if (error) {
-    throw new Error(
-      `Failed to create service: ${error.message}`
-    );
+    throw error;
   }
 
   return data;
 }
-
-type UpdateServiceInput = {
-  name?: string;
-  category?: string;
-  description?: string;
-  active?: boolean;
-};
 
 export async function updateService(
   id: string,
+  businessId: string,
   input: UpdateServiceInput
-) {
-  const updates: UpdateServiceInput = {};
-
-  if (input.name !== undefined) {
-    updates.name = input.name;
-  }
-
-  if (input.category !== undefined) {
-    updates.category = input.category;
-  }
-
-  if (input.description !== undefined) {
-    updates.description = input.description;
-  }
-
-  if (input.active !== undefined) {
-    updates.active = input.active;
-  }
-
+): Promise<Service | null> {
   const { data, error } = await supabase
     .from("services")
-    .update(updates)
+    .update({
+      ...input,
+      updated_at: new Date().toISOString()
+    })
     .eq("id", id)
-    .select(`
-      id,
-      name,
-      category,
-      description,
-      active,
-      created_at,
-      updated_at
-    `)
-    .single();
+    .eq("business_id", businessId)
+    .select("*")
+    .maybeSingle();
 
   if (error) {
-    if (error.code === "PGRST116") {
-      return null;
-    }
-
-    throw new Error(
-      `Failed to update service: ${error.message}`
-    );
+    throw error;
   }
 
   return data;
 }
 
-export async function deleteService(id: string) {
+export async function deleteService(
+  id: string,
+  businessId: string
+): Promise<Service | null> {
   const { data, error } = await supabase
     .from("services")
     .delete()
     .eq("id", id)
-    .select("id")
-    .single();
+    .eq("business_id", businessId)
+    .select("*")
+    .maybeSingle();
 
   if (error) {
-    if (error.code === "PGRST116") {
-      return null;
-    }
-
-    throw new Error(
-      `Failed to delete service: ${error.message}`
-    );
+    throw error;
   }
 
   return data;
