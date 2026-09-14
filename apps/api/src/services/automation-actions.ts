@@ -16,6 +16,43 @@ export interface AutomationActionResult {
 }
 
 const leadStatuses = ["new", "qualified", "contacted", "converted", "lost"] as const;
+const serviceCategories = ["general", "web-development", "business-software", "ai-automation", "cloud-deployment"] as const;
+
+type ServiceCategory = (typeof serviceCategories)[number];
+
+function inferServiceCategory(inputText: string): Exclude<ServiceCategory, "general"> | null {
+  const text = inputText.toLowerCase();
+
+  if (/\b(website|web site|websites|web design|web development|online store|ecommerce|e-commerce)\b/.test(text)) {
+    return "web-development";
+  }
+
+  if (/\b(software|system|pos|point of sale|inventory|stock system|booking system|school management|business system)\b/.test(text)) {
+    return "business-software";
+  }
+
+  if (/\b(ai|artificial intelligence|automation|automate|chatbot|workflow automation)\b/.test(text)) {
+    return "ai-automation";
+  }
+
+  if (/\b(aws|cloud|deployment|deploy|hosting|server|cloudfront|s3)\b/.test(text)) {
+    return "cloud-deployment";
+  }
+
+  return null;
+}
+
+function resolveServiceCategory(match: AutomationMatchResult, inputText: string): ServiceCategory {
+  const configured = typeof match.actionConfig.serviceCategory === "string"
+    ? match.actionConfig.serviceCategory.trim()
+    : "";
+
+  if (configured && configured !== "general" && serviceCategories.includes(configured as ServiceCategory)) {
+    return configured as ServiceCategory;
+  }
+
+  return inferServiceCategory(inputText) ?? "general";
+}
 
 export async function executeAutomationAction(
   match: AutomationMatchResult,
@@ -46,7 +83,7 @@ export async function executeAutomationAction(
 async function executeCreateLead(match: AutomationMatchResult, context: AutomationActionContext): Promise<AutomationActionResult> {
   if (!context.customerId) return { success: false, actionType: "create_lead", result: { message: "A customerId is required to create a lead." } };
 
-  const serviceCategory = typeof match.actionConfig.serviceCategory === "string" ? match.actionConfig.serviceCategory : "general";
+  const serviceCategory = resolveServiceCategory(match, context.inputText);
   const configuredStatus = typeof match.actionConfig.status === "string" ? match.actionConfig.status : "new";
   const leadStatus = leadStatuses.includes(configuredStatus as (typeof leadStatuses)[number]) ? configuredStatus : "new";
   const ruleName = match.rule?.name ?? "automation rule";
@@ -54,9 +91,29 @@ async function executeCreateLead(match: AutomationMatchResult, context: Automati
 
   const { data: existingLead, error: existingLeadError } = await supabase
     .from("leads").select("*").eq("business_id", context.businessId).eq("customer_id", context.customerId)
-    .eq("service_category", serviceCategory).in("status", ["new", "qualified", "contacted"]).limit(1).maybeSingle();
+    .in("status", ["new", "qualified", "contacted"]).order("updated_at", { ascending: false }).limit(20);
   if (existingLeadError) throw existingLeadError;
-  if (existingLead) return { success: true, actionType: "create_lead", result: { created: false, existing: true, lead: existingLead } };
+
+  const matchingLead = (existingLead ?? []).find((lead) => lead.service_category === serviceCategory);
+  if (matchingLead) {
+    return { success: true, actionType: "create_lead", result: { created: false, existing: true, lead: matchingLead } };
+  }
+
+  // If an earlier generic rule created a "general" lead for the same customer,
+  // upgrade that lead instead of creating a duplicate lead for the same enquiry.
+  const genericLead = (existingLead ?? []).find((lead) => lead.service_category === "general");
+  if (genericLead && serviceCategory !== "general") {
+    const { data: updatedLead, error: updateError } = await supabase
+      .from("leads")
+      .update({ service_category: serviceCategory, status: leadStatus, notes, updated_at: new Date().toISOString() })
+      .eq("id", genericLead.id)
+      .eq("business_id", context.businessId)
+      .select("*")
+      .single();
+    if (updateError) throw updateError;
+
+    return { success: true, actionType: "create_lead", result: { created: false, existing: true, upgraded: true, lead: updatedLead } };
+  }
 
   const { data: lead, error: leadError } = await supabase.from("leads").insert({
     business_id: context.businessId, customer_id: context.customerId, service_category: serviceCategory, status: leadStatus, notes,
