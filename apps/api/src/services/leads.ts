@@ -1,21 +1,36 @@
 import { supabase } from "../lib/supabase.js";
 
-export async function getLeads(businessId: string, page = 1, limit = 5) {
+const LEAD_STATUSES = ["new", "contacted", "qualified", "converted", "lost"] as const;
+
+export async function getLeads(
+  businessId: string,
+  page = 1,
+  limit = 5,
+  status = "",
+  service = ""
+) {
   const safePage = Math.max(1, Math.floor(page));
   const safeLimit = Math.min(50, Math.max(1, Math.floor(limit)));
   const from = (safePage - 1) * safeLimit;
   const to = from + safeLimit - 1;
+  const safeStatus = status.trim();
+  const safeService = service.trim();
 
-  const { data, error, count } = await supabase
+  let query = supabase
     .from("leads")
     .select(`id, service_category, status, notes, created_at, updated_at, customers (id, name, phone, email)`, { count: "exact" })
-    .eq("business_id", businessId)
+    .eq("business_id", businessId);
+
+  if (safeStatus) query = query.eq("status", safeStatus);
+  if (safeService) query = query.eq("service_category", safeService);
+
+  const { data, error, count } = await query
     .order("created_at", { ascending: false })
     .range(from, to);
 
   if (error) throw new Error(`Failed to load leads: ${error.message}`);
 
-  const leads = data.map((lead) => {
+  const leads = (data ?? []).map((lead) => {
     const customer = Array.isArray(lead.customers) ? lead.customers[0] : lead.customers;
     return {
       id: lead.id,
@@ -31,6 +46,20 @@ export async function getLeads(businessId: string, page = 1, limit = 5) {
     };
   });
 
+  const statusCounts = await Promise.all(
+    LEAD_STATUSES.map(async (leadStatus) => {
+      const { count: statusCount, error: statusError } = await supabase
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .eq("business_id", businessId)
+        .eq("status", leadStatus);
+      if (statusError) throw new Error(`Failed to load lead summary: ${statusError.message}`);
+      return [leadStatus, statusCount ?? 0] as const;
+    })
+  );
+
+  const summary = Object.fromEntries(statusCounts);
+
   return {
     leads,
     pagination: {
@@ -38,6 +67,14 @@ export async function getLeads(businessId: string, page = 1, limit = 5) {
       limit: safeLimit,
       total: count ?? 0,
       totalPages: Math.ceil((count ?? 0) / safeLimit)
+    },
+    summary: {
+      total: LEAD_STATUSES.reduce((total, leadStatus) => total + (summary[leadStatus] ?? 0), 0),
+      new: summary.new ?? 0,
+      contacted: summary.contacted ?? 0,
+      qualified: summary.qualified ?? 0,
+      converted: summary.converted ?? 0,
+      lost: summary.lost ?? 0
     }
   };
 }
