@@ -1,99 +1,32 @@
 import { supabase } from "../lib/supabase.js";
+import { getWhatsAppChannelForBusiness } from "./whatsapp-channels.js";
 import { sendWhatsAppText } from "./whatsapp.js";
 
 export async function getMessages(conversationId: string, businessId: string) {
-  const { data: conversation, error: conversationError } = await supabase
-    .from("conversations")
-    .select("id")
-    .eq("id", conversationId)
-    .eq("business_id", businessId)
-    .maybeSingle();
-  if (conversationError) throw new Error(`Failed to validate conversation: ${conversationError.message}`);
-  if (!conversation) return [];
-
-  const { data, error } = await supabase
-    .from("messages")
-    .select("id, conversation_id, direction, content, created_at, external_message_id, delivery_status, delivery_error, delivered_at, read_at, failed_at")
-    .eq("conversation_id", conversationId)
-    .order("created_at", { ascending: true });
+  const { data: conversation, error: conversationError } = await supabase.from("conversations").select("id").eq("id", conversationId).eq("business_id", businessId).maybeSingle();
+  if (conversationError) throw new Error(`Failed to validate conversation: ${conversationError.message}`); if (!conversation) return [];
+  const { data, error } = await supabase.from("messages").select("id, conversation_id, direction, content, created_at, external_message_id, delivery_status, delivery_error, delivered_at, read_at, failed_at").eq("conversation_id", conversationId).order("created_at", { ascending: true });
   if (error) throw new Error(`Failed to load messages: ${error.message}`);
-
-  return data.map((message) => ({
-    id: message.id,
-    conversationId: message.conversation_id,
-    direction: message.direction,
-    content: message.content,
-    createdAt: message.created_at,
-    externalMessageId: message.external_message_id,
-    deliveryStatus: message.delivery_status,
-    deliveryError: message.delivery_error,
-    deliveredAt: message.delivered_at,
-    readAt: message.read_at,
-    failedAt: message.failed_at
-  }));
+  return data.map((message) => ({ id: message.id, conversationId: message.conversation_id, direction: message.direction, content: message.content, createdAt: message.created_at, externalMessageId: message.external_message_id, deliveryStatus: message.delivery_status, deliveryError: message.delivery_error, deliveredAt: message.delivered_at, readAt: message.read_at, failedAt: message.failed_at }));
 }
 
 export async function createMessage(conversationId: string, businessId: string, content: string) {
-  const { data: conversation, error: conversationError } = await supabase
-    .from("conversations")
-    .select("id,customer_id,status")
-    .eq("id", conversationId)
-    .eq("business_id", businessId)
-    .maybeSingle();
-  if (conversationError) throw new Error(`Failed to validate conversation: ${conversationError.message}`);
-  if (!conversation) return null;
-
-  const text = content.trim();
-  if (!text) throw new Error("Message content is required.");
-
-  const { data: customer, error: customerError } = await supabase
-    .from("customers")
-    .select("phone")
-    .eq("id", conversation.customer_id)
-    .eq("business_id", businessId)
-    .maybeSingle();
-  if (customerError) throw new Error(`Failed to load conversation customer: ${customerError.message}`);
-  if (!customer?.phone) throw new Error("Conversation customer does not have a WhatsApp phone number.");
-
-  const { data: pending, error: insertError } = await supabase
-    .from("messages")
-    .insert({ conversation_id: conversationId, direction: "outbound", content: text, delivery_status: "pending" })
-    .select("id, conversation_id, direction, content, created_at, external_message_id, delivery_status")
-    .single();
+  const { data: conversation, error: conversationError } = await supabase.from("conversations").select("id,customer_id,status").eq("id", conversationId).eq("business_id", businessId).maybeSingle();
+  if (conversationError) throw new Error(`Failed to validate conversation: ${conversationError.message}`); if (!conversation) return null;
+  const text = content.trim(); if (!text) throw new Error("Message content is required.");
+  const { data: customer, error: customerError } = await supabase.from("customers").select("phone").eq("id", conversation.customer_id).eq("business_id", businessId).maybeSingle();
+  if (customerError) throw new Error(`Failed to load conversation customer: ${customerError.message}`); if (!customer?.phone) throw new Error("Conversation customer does not have a WhatsApp phone number.");
+  const channel = await getWhatsAppChannelForBusiness(businessId);
+  if (!channel) throw new Error("No active WhatsApp channel is configured for this business.");
+  const { data: pending, error: insertError } = await supabase.from("messages").insert({ conversation_id: conversationId, direction: "outbound", content: text, delivery_status: "pending", whatsapp_channel_id: channel.id }).select("id, conversation_id, direction, content, created_at, external_message_id, delivery_status").single();
   if (insertError) throw new Error(`Failed to create pending outbound message: ${insertError.message}`);
-
   try {
-    const delivery = await sendWhatsAppText(customer.phone, text);
-    if (!delivery.sent && delivery.mode === "placeholder") {
-      await supabase.from("messages").update({ delivery_status: "failed", delivery_error: "WhatsApp sending is not configured yet.", failed_at: new Date().toISOString() }).eq("id", pending.id).eq("conversation_id", conversationId);
-      throw new Error("WhatsApp sending is not configured yet.");
-    }
-
-    const { data, error } = await supabase
-      .from("messages")
-      .update({ external_message_id: delivery.messageId ?? null, delivery_status: "sent", delivery_error: null })
-      .eq("id", pending.id)
-      .eq("conversation_id", conversationId)
-      .select("id, conversation_id, direction, content, created_at, external_message_id, delivery_status, delivery_error, delivered_at, read_at, failed_at")
-      .single();
+    const delivery = await sendWhatsAppText(customer.phone, text, channel);
+    if (!delivery.sent) { await supabase.from("messages").update({ delivery_status: "failed", delivery_error: delivery.message ?? "WhatsApp sending failed.", failed_at: new Date().toISOString() }).eq("id", pending.id).eq("conversation_id", conversationId); throw new Error(delivery.message ?? "WhatsApp sending failed."); }
+    const { data, error } = await supabase.from("messages").update({ external_message_id: delivery.messageId ?? null, delivery_status: "sent", delivery_error: null }).eq("id", pending.id).eq("conversation_id", conversationId).select("id, conversation_id, direction, content, created_at, external_message_id, delivery_status, delivery_error, delivered_at, read_at, failed_at").single();
     if (error) throw new Error(`Failed to update outbound delivery status: ${error.message}`);
-
-    return {
-      id: data.id,
-      conversationId: data.conversation_id,
-      direction: data.direction,
-      content: data.content,
-      createdAt: data.created_at,
-      externalMessageId: data.external_message_id,
-      deliveryStatus: data.delivery_status,
-      deliveryError: data.delivery_error,
-      deliveredAt: data.delivered_at,
-      readAt: data.read_at,
-      failedAt: data.failed_at,
-      delivery: { mode: delivery.mode, sent: delivery.sent, messageId: delivery.messageId }
-    };
+    return { id: data.id, conversationId: data.conversation_id, direction: data.direction, content: data.content, createdAt: data.created_at, externalMessageId: data.external_message_id, deliveryStatus: data.delivery_status, deliveryError: data.delivery_error, deliveredAt: data.delivered_at, readAt: data.read_at, failedAt: data.failed_at, delivery: { mode: delivery.mode, sent: delivery.sent, messageId: delivery.messageId } };
   } catch (error) {
-    if (error instanceof Error && error.message === "WhatsApp sending is not configured yet.") throw error;
     const message = error instanceof Error ? error.message : "WhatsApp delivery failed.";
     await supabase.from("messages").update({ delivery_status: "failed", delivery_error: message.slice(0, 1000), failed_at: new Date().toISOString() }).eq("id", pending.id).eq("conversation_id", conversationId);
     throw new Error(message);
