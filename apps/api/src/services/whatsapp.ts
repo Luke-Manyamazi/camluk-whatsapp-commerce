@@ -154,6 +154,26 @@ export async function processIncomingWhatsAppMessage(
   businessId: string,
   incoming: WhatsAppTextMessage
 ) {
+  const { data: duplicate, error: duplicateError } = await supabase
+    .from("messages")
+    .select("id,conversation_id")
+    .eq("external_message_id", incoming.messageId)
+    .maybeSingle();
+
+  if (duplicateError) {
+    throw new Error(`Failed to check WhatsApp message duplicate: ${duplicateError.message}`);
+  }
+
+  if (duplicate) {
+    return {
+      duplicate: true,
+      customer: null,
+      conversation: { id: duplicate.conversation_id, status: "unknown" },
+      message: duplicate,
+      automation: { matched: false, skipped: true, reason: "duplicate" }
+    };
+  }
+
   const customer = await getOrCreateCustomer(
     businessId,
     incoming.from,
@@ -170,17 +190,29 @@ export async function processIncomingWhatsAppMessage(
     .insert({
       conversation_id: conversation.id,
       direction: "inbound",
-      content: incoming.text.trim()
+      content: incoming.text.trim(),
+      external_message_id: incoming.messageId
     })
-    .select("id,conversation_id,direction,content,created_at")
+    .select("id,conversation_id,direction,content,created_at,external_message_id")
     .single();
 
   if (messageError) {
+    if (messageError.code === "23505") {
+      return {
+        duplicate: true,
+        customer,
+        conversation,
+        message: null,
+        automation: { matched: false, skipped: true, reason: "duplicate" }
+      };
+    }
+
     throw new Error(`Failed to store WhatsApp message: ${messageError.message}`);
   }
 
   if (conversation.status === "human-handoff") {
     return {
+      duplicate: false,
       customer,
       conversation,
       message,
@@ -202,6 +234,7 @@ export async function processIncomingWhatsAppMessage(
     if (logError) console.error("Failed to write WhatsApp automation log:", logError);
 
     return {
+      duplicate: false,
       customer,
       conversation,
       message,
@@ -243,6 +276,7 @@ export async function processIncomingWhatsAppMessage(
   if (logError) console.error("Failed to write WhatsApp automation log:", logError);
 
   return {
+    duplicate: false,
     customer,
     conversation,
     message,
