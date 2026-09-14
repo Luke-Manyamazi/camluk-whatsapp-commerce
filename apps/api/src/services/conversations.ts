@@ -1,6 +1,6 @@
 import { supabase } from "../lib/supabase.js";
 
-export async function getConversations() {
+export async function getConversations(businessId: string) {
   const { data, error } = await supabase
     .from("conversations")
     .select(`
@@ -17,14 +17,11 @@ export async function getConversations() {
         created_at
       )
     `)
-    .order("updated_at", {
-      ascending: false
-    });
+    .eq("business_id", businessId)
+    .order("updated_at", { ascending: false });
 
   if (error) {
-    throw new Error(
-      `Failed to load conversations: ${error.message}`
-    );
+    throw new Error(`Failed to load conversations: ${error.message}`);
   }
 
   return data.map((conversation) => {
