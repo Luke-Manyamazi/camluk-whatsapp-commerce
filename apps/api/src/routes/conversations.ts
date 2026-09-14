@@ -8,8 +8,9 @@ router.get("/", requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
     const page = Number(req.query.page ?? 1);
     const limit = Number(req.query.limit ?? 5);
-    const result = await getConversations(req.auth!.businessId, page, limit);
-    res.json(result);
+    const search = typeof req.query.search === "string" ? req.query.search : "";
+    const status = typeof req.query.status === "string" ? req.query.status : "";
+    res.json(await getConversations(req.auth!.businessId, page, limit, search, status));
   } catch (error) {
     console.error("Failed to load conversations:", error);
     res.status(500).json({ message: "Failed to load conversations." });
