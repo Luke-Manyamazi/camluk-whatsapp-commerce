@@ -14,48 +14,34 @@ export async function apiFetch<T>(
     data: { session }
   } = await supabase.auth.getSession();
 
-  console.log("apiFetch session:", {
-    hasSession: !!session,
-    hasAccessToken: !!session?.access_token
-  });
-
   if (!session?.access_token) {
     throw new Error("You are not authenticated.");
   }
 
   const headers = new Headers(options.headers);
+  headers.set("Authorization", `Bearer ${session.access_token}`);
 
-  headers.set(
-    "Authorization",
-    `Bearer ${session.access_token}`
-  );
-
-  headers.set("Content-Type", "application/json");
-
-  console.log("apiFetch request:", {
-    url: `${API_URL}${path}`,
-    hasAuthorization: headers.has("Authorization")
-  });
+  if (options.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
 
   const response = await fetch(`${API_URL}${path}`, {
     ...options,
     headers
   });
 
-  const data = await response.json();
-
-  console.log("apiFetch response:", {
-    status: response.status,
-    ok: response.ok,
-    data
-  });
+  const contentType = response.headers.get("content-type") || "";
+  const data = contentType.includes("application/json")
+    ? await response.json()
+    : await response.text();
 
   if (!response.ok) {
-    throw new Error(
-      data?.message ||
-        data?.error ||
-        "API request failed."
-    );
+    const message =
+      typeof data === "object" && data !== null
+        ? data.message || data.error
+        : undefined;
+
+    throw new Error(message || "API request failed.");
   }
 
   return data as T;
