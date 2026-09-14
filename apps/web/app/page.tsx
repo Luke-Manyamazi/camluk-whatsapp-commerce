@@ -5,88 +5,39 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 
 type Service = { id: string; name: string; description: string };
-type ServicesResponse = { services: Service[] };
 type Conversation = { id: string; customerName: string; phone: string; lastMessage: string; status: string; updatedAt: string };
 type Lead = { id: string; customerName: string; phone: string; email: string; serviceCategory: string | null; status: string; notes: string; createdAt: string; updatedAt: string };
-type ConversationsResponse = { conversations: Conversation[] };
-type LeadsResponse = { leads: Lead[] };
+type Pagination = { page: number; limit: number; total: number; totalPages: number };
+type LeadSummary = { total: number; new: number; contacted: number; qualified: number; converted: number; lost: number };
 
 const navigation = [
   { label: "Overview", href: "/" }, { label: "Conversations", href: "/conversations" }, { label: "Leads", href: "/leads" },
   { label: "Customers", href: "/customers" }, { label: "Services", href: "/services" }, { label: "Automation", href: "/automation" }, { label: "Settings", href: "/settings" }
 ];
-
 function formatDate(date: string) { return new Date(date).toLocaleString(); }
 function formatServiceCategory(category: string | null) { if (!category) return "Not specified"; return category.split("-").map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" "); }
-function getStatusClass(status: string) {
-  switch (status) {
-    case "open": case "new": return "bg-blue-500/10 text-blue-400";
-    case "qualified": return "bg-green-500/10 text-green-400";
-    case "contacted": return "bg-yellow-500/10 text-yellow-400";
-    case "converted": return "bg-purple-500/10 text-purple-400";
-    case "human-handoff": return "bg-orange-500/10 text-orange-400";
-    case "lost": return "bg-red-500/10 text-red-400";
-    default: return "bg-slate-800 text-slate-400";
-  }
-}
+function getStatusClass(status: string) { switch (status) { case "open": case "new": return "bg-blue-500/10 text-blue-400"; case "qualified": return "bg-green-500/10 text-green-400"; case "contacted": return "bg-yellow-500/10 text-yellow-400"; case "converted": return "bg-purple-500/10 text-purple-400"; case "human-handoff": return "bg-orange-500/10 text-orange-400"; case "lost": return "bg-red-500/10 text-red-400"; default: return "bg-slate-800 text-slate-400"; } }
 
 export default function Home() {
-  const [services, setServices] = useState<Service[]>([]);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [servicesLoading, setServicesLoading] = useState(true);
-  const [conversationsLoading, setConversationsLoading] = useState(true);
-  const [leadsLoading, setLeadsLoading] = useState(true);
-  const [servicesError, setServicesError] = useState(false);
-  const [conversationsError, setConversationsError] = useState(false);
-  const [leadsError, setLeadsError] = useState(false);
+  const [services, setServices] = useState<Service[]>([]); const [conversations, setConversations] = useState<Conversation[]>([]); const [leads, setLeads] = useState<Lead[]>([]); const [conversationTotal, setConversationTotal] = useState(0); const [customerTotal, setCustomerTotal] = useState(0); const [leadSummary, setLeadSummary] = useState<LeadSummary>({ total: 0, new: 0, contacted: 0, qualified: 0, converted: 0, lost: 0 });
+  const [servicesLoading, setServicesLoading] = useState(true); const [conversationsLoading, setConversationsLoading] = useState(true); const [leadsLoading, setLeadsLoading] = useState(true); const [servicesError, setServicesError] = useState(false); const [conversationsError, setConversationsError] = useState(false); const [leadsError, setLeadsError] = useState(false);
 
   useEffect(() => {
-    apiFetch<ServicesResponse>("/api/services")
-      .then(data => setServices(data.services || []))
-      .catch(() => setServicesError(true))
-      .finally(() => setServicesLoading(false));
-
-    apiFetch<ConversationsResponse>("/api/conversations?limit=5")
-      .then(data => setConversations((data.conversations || []).slice(0, 5)))
-      .catch(() => setConversationsError(true))
-      .finally(() => setConversationsLoading(false));
-
-    apiFetch<LeadsResponse>("/api/leads?limit=5")
-      .then(data => setLeads((data.leads || []).slice(0, 5)))
-      .catch(() => setLeadsError(true))
-      .finally(() => setLeadsLoading(false));
+    apiFetch<{ services: Service[] }>("/api/services").then(data => setServices(data.services || [])).catch(() => setServicesError(true)).finally(() => setServicesLoading(false));
+    apiFetch<{ conversations: Conversation[]; pagination: Pagination }>("/api/conversations?page=1&limit=5").then(data => { setConversations(data.conversations || []); setConversationTotal(data.pagination?.total ?? 0); }).catch(() => setConversationsError(true)).finally(() => setConversationsLoading(false));
+    apiFetch<{ leads: Lead[]; pagination: Pagination; summary: LeadSummary }>("/api/leads?page=1&limit=5").then(data => { setLeads(data.leads || []); setLeadSummary(data.summary); }).catch(() => setLeadsError(true)).finally(() => setLeadsLoading(false));
+    apiFetch<{ customers: unknown[]; pagination: Pagination }>("/api/customers?page=1&limit=1").then(data => setCustomerTotal(data.pagination?.total ?? 0)).catch(() => setCustomerTotal(0));
   }, []);
 
-  const newLeads = leads.filter(lead => lead.status === "new").length;
-  const openRequests = leads.filter(lead => ["new", "contacted", "qualified"].includes(lead.status)).length;
+  const openRequests = leadSummary.new + leadSummary.contacted + leadSummary.qualified;
   const stats = [
-    { label: "Conversations", value: conversations.length, description: "Recent WhatsApp conversations", href: "/conversations" },
-    { label: "New Leads", value: newLeads, description: "Recent leads awaiting follow-up", href: "/leads" },
-    { label: "Customers", value: new Set(conversations.map(c => c.phone)).size, description: "Customers in recent conversations", href: "/customers" },
-    { label: "Open Requests", value: openRequests, description: "Active recent service requests", href: "/automation" }
+    { label: "Conversations", value: conversationTotal, description: "Total WhatsApp conversations", href: "/conversations" },
+    { label: "New Leads", value: leadSummary.new, description: "Leads awaiting follow-up", href: "/leads" },
+    { label: "Customers", value: customerTotal, description: "Total customers", href: "/customers" },
+    { label: "Open Requests", value: openRequests, description: "Active service requests", href: "/leads" }
   ];
 
-  return (
-    <main className="min-h-screen bg-slate-950 text-white">
-      <div className="flex min-h-screen">
-        <aside className="hidden w-64 border-r border-slate-800 bg-slate-900 p-6 md:block">
-          <div className="mb-10"><h1 className="text-xl font-bold">Camluk</h1><p className="text-sm text-slate-400">WhatsApp Commerce</p></div>
-          <nav className="space-y-2">{navigation.map(item => <Link key={item.label} href={item.href} className={`block w-full rounded-lg px-4 py-3 text-sm transition ${item.href === "/" ? "bg-white font-medium text-slate-950" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>{item.label}</Link>)}</nav>
-        </aside>
-        <section className="flex-1">
-          <header className="border-b border-slate-800 px-6 py-5 md:px-10"><div className="flex items-center justify-between"><div><h2 className="text-2xl font-bold">Dashboard</h2><p className="mt-1 text-sm text-slate-400">Manage your Camluk WhatsApp business assistant.</p></div><div className="rounded-full bg-green-500/10 px-4 py-2 text-sm text-green-400">● System Online</div></div></header>
-          <div className="p-6 md:p-10">
-            <div className="mb-8"><h3 className="text-lg font-semibold">Business overview</h3><p className="mt-1 text-sm text-slate-400">Your WhatsApp operations at a glance.</p></div>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{stats.map(stat => <Link key={stat.label} href={stat.href} className="rounded-xl border border-slate-800 bg-slate-900 p-5 transition hover:border-slate-700 hover:bg-slate-800"><p className="text-sm text-slate-400">{stat.label}</p><p className="mt-3 text-3xl font-bold">{stat.value}</p><p className="mt-2 text-xs text-slate-500">{stat.description}</p></Link>)}</div>
-            <div className="mt-8 rounded-xl border border-slate-800 bg-slate-900 p-6"><div className="mb-6"><h3 className="font-semibold">Camluk Services</h3><p className="mt-1 text-sm text-slate-400">Services currently available through the platform.</p></div>{servicesLoading && <div className="p-8 text-center text-sm text-slate-400">Loading services...</div>}{servicesError && <div className="p-8 text-center text-sm text-red-400">Unable to load Camluk services.</div>}{!servicesLoading && !servicesError && <div className="grid gap-4 md:grid-cols-2">{services.map(service => <Link key={service.id} href={`/services/${service.id}`} className="rounded-lg border border-slate-800 bg-slate-950 p-5 transition hover:border-slate-700"><h4 className="font-medium">{service.name}</h4><p className="mt-2 text-sm leading-6 text-slate-400">{service.description}</p></Link>)}</div>}</div>
-            <div className="mt-8 grid gap-6 lg:grid-cols-2">
-              <section className="rounded-xl border border-slate-800 bg-slate-900 p-6"><div className="flex items-center justify-between"><div><h3 className="font-semibold">Recent conversations</h3><p className="mt-1 text-xs text-slate-500">Latest 5 WhatsApp conversations.</p></div><Link href="/conversations" className="text-xs text-blue-400 hover:text-blue-300">View all</Link></div><div className="mt-6 space-y-3">{conversationsLoading && <div className="p-6 text-center text-sm text-slate-400">Loading conversations...</div>}{conversationsError && <div className="p-6 text-center text-sm text-red-400">Unable to load conversations.</div>}{!conversationsLoading && !conversationsError && conversations.length === 0 && <div className="p-6 text-center text-sm text-slate-400">No conversations yet.</div>}{!conversationsLoading && !conversationsError && conversations.map(conversation => <Link key={conversation.id} href={`/conversations/${conversation.id}`} className="block rounded-lg border border-slate-800 bg-slate-950 p-4 transition hover:border-slate-700"><div className="flex items-start justify-between gap-4"><div className="min-w-0"><p className="font-medium">{conversation.customerName}</p><p className="mt-1 text-xs text-slate-500">{conversation.phone}</p><p className="mt-2 truncate text-sm text-slate-400">{conversation.lastMessage}</p></div><span className={`shrink-0 rounded-full px-2 py-1 text-xs ${getStatusClass(conversation.status)}`}>{conversation.status}</span></div><p className="mt-3 text-xs text-slate-600">{formatDate(conversation.updatedAt)}</p></Link>)}</div></section>
-              <section className="rounded-xl border border-slate-800 bg-slate-900 p-6"><div className="flex items-center justify-between"><div><h3 className="font-semibold">Lead pipeline</h3><p className="mt-1 text-xs text-slate-500">Latest 5 leads captured from WhatsApp.</p></div><Link href="/leads" className="text-xs text-blue-400 hover:text-blue-300">View all</Link></div><div className="mt-6 space-y-3">{leadsLoading && <div className="p-6 text-center text-sm text-slate-400">Loading leads...</div>}{leadsError && <div className="p-6 text-center text-sm text-red-400">Unable to load leads.</div>}{!leadsLoading && !leadsError && leads.length === 0 && <div className="p-6 text-center text-sm text-slate-400">No leads yet.</div>}{!leadsLoading && !leadsError && leads.map(lead => <Link key={lead.id} href={`/leads/${lead.id}`} className="block rounded-lg border border-slate-800 bg-slate-950 p-4 transition hover:border-slate-700"><div className="flex items-start justify-between gap-4"><div className="min-w-0"><p className="font-medium">{lead.customerName}</p><p className="mt-1 text-xs text-slate-500">{lead.phone}</p><p className="mt-2 truncate text-sm text-slate-400">{formatServiceCategory(lead.serviceCategory)}</p></div><span className={`shrink-0 rounded-full px-2 py-1 text-xs ${getStatusClass(lead.status)}`}>{lead.status}</span></div><p className="mt-3 text-xs text-slate-600">{formatDate(lead.updatedAt)}</p></Link>)}</div></section>
-            </div>
-          </div>
-        </section>
-      </div>
-    </main>
-  );
+  return <main className="min-h-screen bg-slate-950 text-white"><div className="flex min-h-screen"><aside className="hidden w-64 border-r border-slate-800 bg-slate-900 p-6 md:block"><div className="mb-10"><h1 className="text-xl font-bold">Camluk</h1><p className="text-sm text-slate-400">WhatsApp Commerce</p></div><nav className="space-y-2">{navigation.map(item => <Link key={item.label} href={item.href} className={`block w-full rounded-lg px-4 py-3 text-sm transition ${item.href === "/" ? "bg-white font-medium text-slate-950" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>{item.label}</Link>)}</nav></aside><section className="flex-1"><header className="border-b border-slate-800 px-6 py-5 md:px-10"><div className="flex items-center justify-between"><div><h2 className="text-2xl font-bold">Dashboard</h2><p className="mt-1 text-sm text-slate-400">Manage your Camluk WhatsApp business assistant.</p></div><div className="rounded-full bg-green-500/10 px-4 py-2 text-sm text-green-400">● System Online</div></div></header><div className="p-6 md:p-10"><div className="mb-8"><h3 className="text-lg font-semibold">Business overview</h3><p className="mt-1 text-sm text-slate-400">Totals below cover the business; lists show only the latest 5 records.</p></div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{stats.map(stat => <Link key={stat.label} href={stat.href} className="rounded-xl border border-slate-800 bg-slate-900 p-5 transition hover:border-slate-700 hover:bg-slate-800"><p className="text-sm text-slate-400">{stat.label}</p><p className="mt-3 text-3xl font-bold">{stat.value}</p><p className="mt-2 text-xs text-slate-500">{stat.description}</p></Link>)}</div>
+<div className="mt-8 rounded-xl border border-slate-800 bg-slate-900 p-6"><div className="mb-6"><h3 className="font-semibold">Camluk Services</h3><p className="mt-1 text-sm text-slate-400">Services currently available through the platform.</p></div>{servicesLoading && <div className="p-8 text-center text-sm text-slate-400">Loading services...</div>}{servicesError && <div className="p-8 text-center text-sm text-red-400">Unable to load Camluk services.</div>}{!servicesLoading && !servicesError && services.length === 0 && <div className="p-8 text-center text-sm text-slate-400">No services configured yet.</div>}{!servicesLoading && !servicesError && services.length > 0 && <div className="grid gap-4 md:grid-cols-2">{services.map(service => <Link key={service.id} href={`/services/${service.id}`} className="rounded-lg border border-slate-800 bg-slate-950 p-5 transition hover:border-slate-700"><h4 className="font-medium">{service.name}</h4><p className="mt-2 text-sm leading-6 text-slate-400">{service.description}</p></Link>)}</div>}</div>
+<div className="mt-8 grid gap-6 lg:grid-cols-2"><section className="rounded-xl border border-slate-800 bg-slate-900 p-6"><div className="flex items-center justify-between"><div><h3 className="font-semibold">Recent conversations</h3><p className="mt-1 text-xs text-slate-500">Latest 5 WhatsApp conversations.</p></div><Link href="/conversations" className="text-xs text-blue-400 hover:text-blue-300">View all</Link></div><div className="mt-6 space-y-3">{conversationsLoading && <div className="p-6 text-center text-sm text-slate-400">Loading conversations...</div>}{conversationsError && <div className="p-6 text-center text-sm text-red-400">Unable to load conversations.</div>}{!conversationsLoading && !conversationsError && conversations.length === 0 && <div className="p-6 text-center text-sm text-slate-400">No conversations yet.</div>}{!conversationsLoading && !conversationsError && conversations.map(conversation => <Link key={conversation.id} href={`/conversations/${conversation.id}`} className="block rounded-lg border border-slate-800 bg-slate-950 p-4 transition hover:border-slate-700"><div className="flex items-start justify-between gap-4"><div className="min-w-0"><p className="font-medium">{conversation.customerName}</p><p className="mt-1 text-xs text-slate-500">{conversation.phone}</p><p className="mt-2 truncate text-sm text-slate-400">{conversation.lastMessage || "No messages yet"}</p></div><span className={`shrink-0 rounded-full px-2 py-1 text-xs ${getStatusClass(conversation.status)}`}>{conversation.status}</span></div><p className="mt-3 text-xs text-slate-600">{formatDate(conversation.updatedAt)}</p></Link>)}</div></section><section className="rounded-xl border border-slate-800 bg-slate-900 p-6"><div className="flex items-center justify-between"><div><h3 className="font-semibold">Lead pipeline</h3><p className="mt-1 text-xs text-slate-500">Latest 5 leads captured from WhatsApp.</p></div><Link href="/leads" className="text-xs text-blue-400 hover:text-blue-300">View all</Link></div><div className="mt-6 space-y-3">{leadsLoading && <div className="p-6 text-center text-sm text-slate-400">Loading leads...</div>}{leadsError && <div className="p-6 text-center text-sm text-red-400">Unable to load leads.</div>}{!leadsLoading && !leadsError && leads.length === 0 && <div className="p-6 text-center text-sm text-slate-400">No leads yet.</div>}{!leadsLoading && !leadsError && leads.map(lead => <Link key={lead.id} href={`/leads/${lead.id}`} className="block rounded-lg border border-slate-800 bg-slate-950 p-4 transition hover:border-slate-700"><div className="flex items-start justify-between gap-4"><div className="min-w-0"><p className="font-medium">{lead.customerName}</p><p className="mt-1 text-xs text-slate-500">{lead.phone}</p><p className="mt-2 truncate text-sm text-slate-400">{formatServiceCategory(lead.serviceCategory)}</p></div><span className={`shrink-0 rounded-full px-2 py-1 text-xs ${getStatusClass(lead.status)}`}>{lead.status}</span></div><p className="mt-3 text-xs text-slate-600">{formatDate(lead.updatedAt)}</p></Link>)}</div></section></div></div></section></div></main>;
 }
