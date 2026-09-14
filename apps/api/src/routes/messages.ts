@@ -25,7 +25,10 @@ router.post("/:conversationId", requireAuth, async (req: AuthenticatedRequest, r
     res.status(201).json({ message });
   } catch (error) {
     console.error("Failed to create message:", error);
-    res.status(500).json({ message: error instanceof Error ? error.message : "Failed to create message." });
+    const safeMessage = error instanceof Error && error.message === "WhatsApp sending is not configured yet."
+      ? error.message
+      : "Failed to send message.";
+    res.status(500).json({ message: safeMessage });
   }
 });
 
