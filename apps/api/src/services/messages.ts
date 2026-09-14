@@ -1,6 +1,24 @@
 import { supabase } from "../lib/supabase.js";
 
-export async function getMessages(conversationId: string) {
+export async function getMessages(
+  conversationId: string,
+  businessId: string
+) {
+  const { data: conversation, error: conversationError } = await supabase
+    .from("conversations")
+    .select("id")
+    .eq("id", conversationId)
+    .eq("business_id", businessId)
+    .maybeSingle();
+
+  if (conversationError) {
+    throw new Error(`Failed to validate conversation: ${conversationError.message}`);
+  }
+
+  if (!conversation) {
+    return [];
+  }
+
   const { data, error } = await supabase
     .from("messages")
     .select(`
@@ -11,14 +29,10 @@ export async function getMessages(conversationId: string) {
       created_at
     `)
     .eq("conversation_id", conversationId)
-    .order("created_at", {
-      ascending: true
-    });
+    .order("created_at", { ascending: true });
 
   if (error) {
-    throw new Error(
-      `Failed to load messages: ${error.message}`
-    );
+    throw new Error(`Failed to load messages: ${error.message}`);
   }
 
   return data.map((message) => ({
@@ -32,8 +46,24 @@ export async function getMessages(conversationId: string) {
 
 export async function createMessage(
   conversationId: string,
+  businessId: string,
   content: string
 ) {
+  const { data: conversation, error: conversationError } = await supabase
+    .from("conversations")
+    .select("id")
+    .eq("id", conversationId)
+    .eq("business_id", businessId)
+    .maybeSingle();
+
+  if (conversationError) {
+    throw new Error(`Failed to validate conversation: ${conversationError.message}`);
+  }
+
+  if (!conversation) {
+    return null;
+  }
+
   const { data, error } = await supabase
     .from("messages")
     .insert({
@@ -51,9 +81,7 @@ export async function createMessage(
     .single();
 
   if (error) {
-    throw new Error(
-      `Failed to create message: ${error.message}`
-    );
+    throw new Error(`Failed to create message: ${error.message}`);
   }
 
   return {
