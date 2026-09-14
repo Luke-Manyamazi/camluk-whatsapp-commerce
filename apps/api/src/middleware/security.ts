@@ -5,6 +5,7 @@ const buckets = new Map<string, Bucket>();
 
 function rateLimit(windowMs: number, max: number, keyPrefix: string) {
   return (req: Request, res: Response, next: NextFunction): void => {
+    if (keyPrefix === "api" && req.path.startsWith("/whatsapp/webhook")) { next(); return; }
     const now = Date.now();
     const key = `${keyPrefix}:${req.ip || req.socket.remoteAddress || "unknown"}`;
     const current = buckets.get(key);
@@ -14,10 +15,7 @@ function rateLimit(windowMs: number, max: number, keyPrefix: string) {
     res.setHeader("X-RateLimit-Limit", max);
     res.setHeader("X-RateLimit-Remaining", Math.max(0, max - bucket.count));
     res.setHeader("X-RateLimit-Reset", Math.ceil(bucket.resetAt / 1000));
-    if (bucket.count > max) {
-      res.status(429).json({ message: "Too many requests. Please try again later." });
-      return;
-    }
+    if (bucket.count > max) { res.status(429).json({ message: "Too many requests. Please try again later." }); return; }
     next();
   };
 }
@@ -30,8 +28,6 @@ export function securityHeaders(_req: Request, res: Response, next: NextFunction
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
-  if (process.env.NODE_ENV === "production") {
-    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
-  }
+  if (process.env.NODE_ENV === "production") res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   next();
 }
