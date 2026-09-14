@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase.js";
+import { sendWhatsAppText } from "./whatsapp.js";
 
 export async function getMessages(
   conversationId: string,
@@ -26,7 +27,8 @@ export async function getMessages(
       conversation_id,
       direction,
       content,
-      created_at
+      created_at,
+      external_message_id
     `)
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: true });
@@ -40,7 +42,8 @@ export async function getMessages(
     conversationId: message.conversation_id,
     direction: message.direction,
     content: message.content,
-    createdAt: message.created_at
+    createdAt: message.created_at,
+    externalMessageId: message.external_message_id
   }));
 }
 
@@ -51,7 +54,7 @@ export async function createMessage(
 ) {
   const { data: conversation, error: conversationError } = await supabase
     .from("conversations")
-    .select("id")
+    .select("id,customer_id,status")
     .eq("id", conversationId)
     .eq("business_id", businessId)
     .maybeSingle();
@@ -64,24 +67,48 @@ export async function createMessage(
     return null;
   }
 
+  const text = content.trim();
+  const { data: customer, error: customerError } = await supabase
+    .from("customers")
+    .select("phone")
+    .eq("id", conversation.customer_id)
+    .eq("business_id", businessId)
+    .maybeSingle();
+
+  if (customerError) {
+    throw new Error(`Failed to load conversation customer: ${customerError.message}`);
+  }
+
+  if (!customer?.phone) {
+    throw new Error("Conversation customer does not have a WhatsApp phone number.");
+  }
+
+  const delivery = await sendWhatsAppText(customer.phone, text);
+
+  if (!delivery.sent && delivery.mode === "placeholder") {
+    throw new Error("WhatsApp sending is not configured yet.");
+  }
+
   const { data, error } = await supabase
     .from("messages")
     .insert({
       conversation_id: conversationId,
       direction: "outbound",
-      content: content.trim()
+      content: text,
+      external_message_id: delivery.messageId ?? null
     })
     .select(`
       id,
       conversation_id,
       direction,
       content,
-      created_at
+      created_at,
+      external_message_id
     `)
     .single();
 
   if (error) {
-    throw new Error(`Failed to create message: ${error.message}`);
+    throw new Error(`Failed to store outbound message: ${error.message}`);
   }
 
   return {
@@ -89,6 +116,12 @@ export async function createMessage(
     conversationId: data.conversation_id,
     direction: data.direction,
     content: data.content,
-    createdAt: data.created_at
+    createdAt: data.created_at,
+    externalMessageId: data.external_message_id,
+    delivery: {
+      mode: delivery.mode,
+      sent: delivery.sent,
+      messageId: delivery.messageId
+    }
   };
 }
