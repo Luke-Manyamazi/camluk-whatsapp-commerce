@@ -1,5 +1,4 @@
 import "dotenv/config";
-import crypto from "node:crypto";
 import express, { type Request } from "express";
 import cors from "cors";
 import servicesRouter from "./routes/services.js";
@@ -46,10 +45,7 @@ app.get("/health", (_req, res) => {
 });
 
 app.get("/api/auth/test", requireAuth, (req, res) => {
-  res.json({
-    authenticated: true,
-    auth: req.auth
-  });
+  res.json({ authenticated: true, auth: req.auth });
 });
 
 app.use("/api/services", servicesRouter);
@@ -70,28 +66,6 @@ app.use((error: unknown, _req: Request, res: express.Response, _next: express.Ne
   console.error("Unhandled API error:", error);
   res.status(500).json({ message: "Internal server error." });
 });
-
-export function verifyMetaSignature(req: Request): boolean {
-  const appSecret = process.env.WHATSAPP_APP_SECRET?.trim();
-  const signature = req.header("X-Hub-Signature-256");
-
-  if (!appSecret || !signature || !req.rawBody) {
-    return false;
-  }
-
-  const expected = `sha256=${crypto
-    .createHmac("sha256", appSecret)
-    .update(req.rawBody)
-    .digest("hex")}`;
-
-  const expectedBuffer = Buffer.from(expected, "utf8");
-  const receivedBuffer = Buffer.from(signature, "utf8");
-
-  return (
-    expectedBuffer.length === receivedBuffer.length &&
-    crypto.timingSafeEqual(expectedBuffer, receivedBuffer)
-  );
-}
 
 app.listen(PORT, () => {
   console.log(`API server running on port ${PORT}`);
