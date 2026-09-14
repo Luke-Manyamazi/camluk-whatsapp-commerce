@@ -8,7 +8,9 @@ router.get("/", requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
     const page = Number(req.query.page ?? 1);
     const limit = Number(req.query.limit ?? 5);
-    res.json(await getLeads(req.auth!.businessId, page, limit));
+    const status = typeof req.query.status === "string" ? req.query.status : "";
+    const service = typeof req.query.service === "string" ? req.query.service : "";
+    res.json(await getLeads(req.auth!.businessId, page, limit, status, service));
   } catch (error) {
     console.error("Failed to load leads:", error);
     res.status(500).json({ message: "Failed to load leads." });
