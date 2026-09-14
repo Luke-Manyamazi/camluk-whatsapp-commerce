@@ -2,11 +2,16 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api";
 
 type Service = {
   id: string;
   name: string;
   description: string;
+};
+
+type ServicesResponse = {
+  services: Service[];
 };
 
 type Conversation = {
@@ -72,7 +77,10 @@ function formatServiceCategory(category: string | null) {
 
   return category
     .split("-")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .map(
+      (word) =>
+        word.charAt(0).toUpperCase() + word.slice(1)
+    )
     .join(" ");
 }
 
@@ -104,55 +112,88 @@ function getStatusClass(status: string) {
 
 export default function Home() {
   const API_URL =
-    process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    process.env.NEXT_PUBLIC_API_URL ||
+    "http://localhost:4000";
 
   const [services, setServices] = useState<Service[]>([]);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [conversations, setConversations] = useState<
+    Conversation[]
+  >([]);
   const [leads, setLeads] = useState<Lead[]>([]);
 
-  const [servicesLoading, setServicesLoading] = useState(true);
+  const [servicesLoading, setServicesLoading] =
+    useState(true);
   const [conversationsLoading, setConversationsLoading] =
     useState(true);
-  const [leadsLoading, setLeadsLoading] = useState(true);
+  const [leadsLoading, setLeadsLoading] =
+    useState(true);
 
-  const [servicesError, setServicesError] = useState(false);
+  const [servicesError, setServicesError] =
+    useState(false);
   const [conversationsError, setConversationsError] =
     useState(false);
-  const [leadsError, setLeadsError] = useState(false);
+  const [leadsError, setLeadsError] =
+    useState(false);
 
+  /*
+   * Services
+   *
+   * Uses apiFetch so the Supabase access token is
+   * automatically sent to the secured API.
+   */
   useEffect(() => {
-    fetch(`${API_URL}/api/services`)
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error("Failed to fetch services");
-        }
+    async function loadServices() {
+      try {
+        setServicesLoading(true);
+        setServicesError(false);
 
-        return response.json();
-      })
-      .then((data) => {
+        const data =
+          await apiFetch<ServicesResponse>(
+            "/api/services"
+          );
+
         setServices(data.services || []);
-        setServicesLoading(false);
-      })
-      .catch((error) => {
-        console.error("Failed to load services:", error);
-        setServicesError(true);
-        setServicesLoading(false);
-      });
+      } catch (error) {
+        console.error(
+          "Failed to load services:",
+          error
+        );
 
+        setServicesError(true);
+      } finally {
+        setServicesLoading(false);
+      }
+    }
+
+    loadServices();
+  }, []);
+
+  /*
+   * Conversations and Leads
+   */
+  useEffect(() => {
     fetch(`${API_URL}/api/conversations`)
       .then((response) => {
         if (!response.ok) {
-          throw new Error("Failed to fetch conversations");
+          throw new Error(
+            "Failed to fetch conversations"
+          );
         }
 
         return response.json();
       })
       .then((data) => {
-        setConversations(data.conversations || []);
+        setConversations(
+          data.conversations || []
+        );
         setConversationsLoading(false);
       })
       .catch((error) => {
-        console.error("Failed to load conversations:", error);
+        console.error(
+          "Failed to load conversations:",
+          error
+        );
+
         setConversationsError(true);
         setConversationsLoading(false);
       });
@@ -170,7 +211,11 @@ export default function Home() {
         setLeadsLoading(false);
       })
       .catch((error) => {
-        console.error("Failed to load leads:", error);
+        console.error(
+          "Failed to load leads:",
+          error
+        );
+
         setLeadsError(true);
         setLeadsLoading(false);
       });
@@ -203,7 +248,9 @@ export default function Home() {
     {
       label: "Customers",
       value: new Set(
-        conversations.map((conversation) => conversation.phone)
+        conversations.map(
+          (conversation) => conversation.phone
+        )
       ).size,
       description: "Customers with conversations",
       href: "/customers"
@@ -424,43 +471,47 @@ export default function Home() {
 
                   {!conversationsLoading &&
                     !conversationsError &&
-                    conversations.slice(0, 5).map((conversation) => (
-                      <Link
-                        key={conversation.id}
-                        href={`/conversations/${conversation.id}`}
-                        className="block rounded-lg border border-slate-800 bg-slate-950 p-4 transition hover:border-slate-700 hover:bg-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400"
-                      >
-                        <div className="flex items-start justify-between gap-4">
+                    conversations
+                      .slice(0, 5)
+                      .map((conversation) => (
+                        <Link
+                          key={conversation.id}
+                          href={`/conversations/${conversation.id}`}
+                          className="block rounded-lg border border-slate-800 bg-slate-950 p-4 transition hover:border-slate-700 hover:bg-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400"
+                        >
+                          <div className="flex items-start justify-between gap-4">
 
-                          <div className="min-w-0">
-                            <p className="font-medium">
-                              {conversation.customerName}
-                            </p>
+                            <div className="min-w-0">
+                              <p className="font-medium">
+                                {conversation.customerName}
+                              </p>
 
-                            <p className="mt-1 text-xs text-slate-500">
-                              {conversation.phone}
-                            </p>
+                              <p className="mt-1 text-xs text-slate-500">
+                                {conversation.phone}
+                              </p>
 
-                            <p className="mt-2 truncate text-sm text-slate-400">
-                              {conversation.lastMessage}
-                            </p>
+                              <p className="mt-2 truncate text-sm text-slate-400">
+                                {conversation.lastMessage}
+                              </p>
+                            </div>
+
+                            <span
+                              className={`shrink-0 rounded-full px-2 py-1 text-xs ${getStatusClass(
+                                conversation.status
+                              )}`}
+                            >
+                              {conversation.status}
+                            </span>
+
                           </div>
 
-                          <span
-                            className={`shrink-0 rounded-full px-2 py-1 text-xs ${getStatusClass(
-                              conversation.status
-                            )}`}
-                          >
-                            {conversation.status}
-                          </span>
-
-                        </div>
-
-                        <p className="mt-3 text-xs text-slate-600">
-                          {formatDate(conversation.updatedAt)}
-                        </p>
-                      </Link>
-                    ))}
+                          <p className="mt-3 text-xs text-slate-600">
+                            {formatDate(
+                              conversation.updatedAt
+                            )}
+                          </p>
+                        </Link>
+                      ))}
 
                 </div>
               </div>
@@ -521,45 +572,47 @@ export default function Home() {
 
                   {!leadsLoading &&
                     !leadsError &&
-                    leads.slice(0, 5).map((lead) => (
-                      <Link
-                        key={lead.id}
-                        href={`/leads/${lead.id}`}
-                        className="block rounded-lg border border-slate-800 bg-slate-950 p-4 transition hover:border-slate-700 hover:bg-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400"
-                      >
-                        <div className="flex items-start justify-between gap-4">
+                    leads
+                      .slice(0, 5)
+                      .map((lead) => (
+                        <Link
+                          key={lead.id}
+                          href={`/leads/${lead.id}`}
+                          className="block rounded-lg border border-slate-800 bg-slate-950 p-4 transition hover:border-slate-700 hover:bg-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400"
+                        >
+                          <div className="flex items-start justify-between gap-4">
 
-                          <div className="min-w-0">
-                            <p className="font-medium">
-                              {lead.customerName}
-                            </p>
+                            <div className="min-w-0">
+                              <p className="font-medium">
+                                {lead.customerName}
+                              </p>
 
-                            <p className="mt-1 text-xs text-slate-500">
-                              {formatServiceCategory(
-                                lead.serviceCategory
-                              )}
-                            </p>
+                              <p className="mt-1 text-xs text-slate-500">
+                                {formatServiceCategory(
+                                  lead.serviceCategory
+                                )}
+                              </p>
 
-                            <p className="mt-2 truncate text-sm text-slate-400">
-                              {lead.notes || "No notes"}
-                            </p>
+                              <p className="mt-2 truncate text-sm text-slate-400">
+                                {lead.notes || "No notes"}
+                              </p>
+                            </div>
+
+                            <span
+                              className={`shrink-0 rounded-full px-2 py-1 text-xs ${getStatusClass(
+                                lead.status
+                              )}`}
+                            >
+                              {lead.status}
+                            </span>
+
                           </div>
 
-                          <span
-                            className={`shrink-0 rounded-full px-2 py-1 text-xs ${getStatusClass(
-                              lead.status
-                            )}`}
-                          >
-                            {lead.status}
-                          </span>
-
-                        </div>
-
-                        <p className="mt-3 text-xs text-slate-600">
-                          {formatDate(lead.createdAt)}
-                        </p>
-                      </Link>
-                    ))}
+                          <p className="mt-3 text-xs text-slate-600">
+                            {formatDate(lead.createdAt)}
+                          </p>
+                        </Link>
+                      ))}
 
                 </div>
               </div>

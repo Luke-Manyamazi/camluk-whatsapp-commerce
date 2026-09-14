@@ -7,6 +7,8 @@ import messagesRouter from "./routes/messages.js";
 import leadsRouter from "./routes/leads.js";
 import customersRouter from "./routes/customers.js";
 import { requireAuth, type AuthenticatedRequest } from "./middleware/auth.js";
+import whatsappRouter from "./routes/whatsapp.js";
+import automationRouter from "./routes/automation.js";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -44,6 +46,8 @@ app.use("/api/conversations", conversationsRouter);
 app.use("/api/messages", messagesRouter);
 app.use("/api/leads", leadsRouter);
 app.use("/api/customers", customersRouter);
+app.use("/api/whatsapp", whatsappRouter);
+app.use("/api/automation", automationRouter);
 
 app.listen(PORT, () => {
   console.log(`Camluk API running on http://localhost:${PORT}`);

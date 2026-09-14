@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import Sidebar from "../../../components/Sidebar";
+import { apiFetch } from "@/lib/api";
 
 type Service = {
   id: string;
@@ -10,6 +11,10 @@ type Service = {
   category: string;
   description: string;
   active: boolean;
+};
+
+type ServiceResponse = {
+  service: Service;
 };
 
 const API_URL =
@@ -47,18 +52,10 @@ export default function ServiceDetailPage({
       setLoading(true);
       setError("");
 
-      const response = await fetch(
-        `${API_URL}/api/services/${id}`
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.message ||
-            "Failed to load service."
+      const data =
+        await apiFetch<ServiceResponse>(
+          `/api/services/${id}`
         );
-      }
 
       const loadedService = data.service;
 
@@ -105,30 +102,19 @@ export default function ServiceDetailPage({
       setFormError("");
       setSuccessMessage("");
 
-      const response = await fetch(
-        `${API_URL}/api/services/${id}`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            name: name.trim(),
-            category: category.trim(),
-            description: description.trim(),
-            active
-          })
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.message ||
-            "Failed to update service."
+      const data =
+        await apiFetch<ServiceResponse>(
+          `/api/services/${id}`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({
+              name: name.trim(),
+              category: category.trim(),
+              description: description.trim(),
+              active
+            })
+          }
         );
-      }
 
       setService(data.service);
 
@@ -168,21 +154,12 @@ export default function ServiceDetailPage({
       setDeleting(true);
       setFormError("");
 
-      const response = await fetch(
-        `${API_URL}/api/services/${id}`,
+      await apiFetch(
+        `/api/services/${id}`,
         {
           method: "DELETE"
         }
       );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.message ||
-            "Failed to delete service."
-        );
-      }
 
       window.location.href = "/services";
     } catch (error) {
@@ -391,7 +368,9 @@ export default function ServiceDetailPage({
                       <button
                         type="button"
                         onClick={handleDelete}
-                        disabled={deleting || saving}
+                        disabled={
+                          deleting || saving
+                        }
                         className="rounded-lg border border-red-500/30 px-4 py-2.5 text-sm font-medium text-red-400 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {deleting

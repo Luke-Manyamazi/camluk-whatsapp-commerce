@@ -1,9 +1,9 @@
-
 "use client";
 
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import Sidebar from "../../components/Sidebar";
+import { apiFetch } from "@/lib/api";
 
 type Service = {
   id: string;
@@ -13,12 +13,13 @@ type Service = {
   active: boolean;
 };
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:4000";
+type ServicesResponse = {
+  services: Service[];
+};
 
-const BUSINESS_ID =
-  "32261ff6-ad0b-4492-802d-c976ff3a5226";
+type ServiceResponse = {
+  service: Service;
+};
 
 function formatCategory(category: string) {
   return category
@@ -59,18 +60,9 @@ export default function ServicesPage() {
       setLoading(true);
       setError("");
 
-      const response = await fetch(
-        `${API_URL}/api/services`
+      const data = await apiFetch<ServicesResponse>(
+        "/api/services"
       );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.message ||
-            "Failed to load services."
-        );
-      }
 
       setServices(data.services ?? []);
     } catch (error) {
@@ -109,15 +101,11 @@ export default function ServicesPage() {
       setActionError("");
       setSuccessMessage("");
 
-      const response = await fetch(
-        `${API_URL}/api/services`,
+      const data = await apiFetch<ServiceResponse>(
+        "/api/services",
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
           body: JSON.stringify({
-            businessId: BUSINESS_ID,
             name: name.trim(),
             category: category.trim(),
             description: description.trim(),
@@ -125,15 +113,6 @@ export default function ServicesPage() {
           })
         }
       );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.message ||
-            "Failed to create service."
-        );
-      }
 
       setName("");
       setCategory("");
@@ -174,21 +153,12 @@ export default function ServicesPage() {
       setActionError("");
       setSuccessMessage("");
 
-      const response = await fetch(
-        `${API_URL}/api/services/${service.id}`,
+      await apiFetch(
+        `/api/services/${service.id}`,
         {
           method: "DELETE"
         }
       );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.message ||
-            "Failed to delete service."
-        );
-      }
 
       setServices((current) =>
         current.filter(
@@ -596,4 +566,3 @@ export default function ServicesPage() {
     </main>
   );
 }
-
