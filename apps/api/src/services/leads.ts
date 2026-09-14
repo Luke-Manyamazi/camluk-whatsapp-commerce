@@ -1,6 +1,6 @@
 import { supabase } from "../lib/supabase.js";
 
-export async function getLeads() {
+export async function getLeads(businessId: string) {
   const { data, error } = await supabase
     .from("leads")
     .select(`
@@ -17,21 +17,13 @@ export async function getLeads() {
         email
       )
     `)
-    .order("created_at", {
-      ascending: false
-    });
+    .eq("business_id", businessId)
+    .order("created_at", { ascending: false });
 
-  if (error) {
-    throw new Error(
-      `Failed to load leads: ${error.message}`
-    );
-  }
+  if (error) throw new Error(`Failed to load leads: ${error.message}`);
 
   return data.map((lead) => {
-    const customer = Array.isArray(lead.customers)
-      ? lead.customers[0]
-      : lead.customers;
-
+    const customer = Array.isArray(lead.customers) ? lead.customers[0] : lead.customers;
     return {
       id: lead.id,
       customerId: customer?.id ?? "",
@@ -47,7 +39,7 @@ export async function getLeads() {
   });
 }
 
-export async function getLeadById(id: string) {
+export async function getLeadById(id: string, businessId: string) {
   const { data, error } = await supabase
     .from("leads")
     .select(`
@@ -65,18 +57,13 @@ export async function getLeadById(id: string) {
       )
     `)
     .eq("id", id)
-    .single();
+    .eq("business_id", businessId)
+    .maybeSingle();
 
-  if (error) {
-    throw new Error(
-      `Failed to load lead: ${error.message}`
-    );
-  }
+  if (error) throw new Error(`Failed to load lead: ${error.message}`);
+  if (!data) return null;
 
-  const customer = Array.isArray(data.customers)
-    ? data.customers[0]
-    : data.customers;
-
+  const customer = Array.isArray(data.customers) ? data.customers[0] : data.customers;
   return {
     id: data.id,
     customerId: customer?.id ?? "",
@@ -97,6 +84,16 @@ export async function createLead(
   serviceCategory?: string,
   notes?: string
 ) {
+  const { data: customer, error: customerError } = await supabase
+    .from("customers")
+    .select("id")
+    .eq("id", customerId)
+    .eq("business_id", businessId)
+    .maybeSingle();
+
+  if (customerError) throw new Error(`Failed to validate customer: ${customerError.message}`);
+  if (!customer) return null;
+
   const { data, error } = await supabase
     .from("leads")
     .insert({
@@ -106,21 +103,10 @@ export async function createLead(
       status: "new",
       notes: notes ?? null
     })
-    .select(`
-      id,
-      service_category,
-      status,
-      notes,
-      created_at,
-      updated_at
-    `)
+    .select(`id, service_category, status, notes, created_at, updated_at`)
     .single();
 
-  if (error) {
-    throw new Error(
-      `Failed to create lead: ${error.message}`
-    );
-  }
+  if (error) throw new Error(`Failed to create lead: ${error.message}`);
 
   return {
     id: data.id,
@@ -134,46 +120,24 @@ export async function createLead(
 
 export async function updateLead(
   id: string,
-  updates: {
-    status?: string;
-    serviceCategory?: string;
-    notes?: string;
-  }
+  businessId: string,
+  updates: { status?: string; serviceCategory?: string; notes?: string }
 ) {
   const updateData: Record<string, string | null> = {};
-
-  if (updates.status !== undefined) {
-    updateData.status = updates.status;
-  }
-
-  if (updates.serviceCategory !== undefined) {
-    updateData.service_category =
-      updates.serviceCategory || null;
-  }
-
-  if (updates.notes !== undefined) {
-    updateData.notes = updates.notes || null;
-  }
+  if (updates.status !== undefined) updateData.status = updates.status;
+  if (updates.serviceCategory !== undefined) updateData.service_category = updates.serviceCategory || null;
+  if (updates.notes !== undefined) updateData.notes = updates.notes || null;
 
   const { data, error } = await supabase
     .from("leads")
     .update(updateData)
     .eq("id", id)
-    .select(`
-      id,
-      service_category,
-      status,
-      notes,
-      created_at,
-      updated_at
-    `)
-    .single();
+    .eq("business_id", businessId)
+    .select(`id, service_category, status, notes, created_at, updated_at`)
+    .maybeSingle();
 
-  if (error) {
-    throw new Error(
-      `Failed to update lead: ${error.message}`
-    );
-  }
+  if (error) throw new Error(`Failed to update lead: ${error.message}`);
+  if (!data) return null;
 
   return {
     id: data.id,
