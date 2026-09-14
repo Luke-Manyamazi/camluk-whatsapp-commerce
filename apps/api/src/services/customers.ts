@@ -1,7 +1,18 @@
 import { supabase } from "../lib/supabase.js";
 
-export async function getCustomers(businessId: string) {
-  const { data, error } = await supabase
+export async function getCustomers(
+  businessId: string,
+  page = 1,
+  limit = 5,
+  search = ""
+) {
+  const safePage = Math.max(1, Math.floor(page));
+  const safeLimit = Math.min(50, Math.max(1, Math.floor(limit)));
+  const from = (safePage - 1) * safeLimit;
+  const to = from + safeLimit - 1;
+  const term = search.trim();
+
+  let query = supabase
     .from("customers")
     .select(`
       id,
@@ -10,30 +21,35 @@ export async function getCustomers(businessId: string) {
       email,
       created_at,
       updated_at,
-      conversations (
-        id,
-        status,
-        updated_at
-      ),
-      leads (
-        id,
-        status,
-        service_category,
-        created_at
-      )
-    `)
-    .eq("business_id", businessId)
-    .order("created_at", { ascending: false });
+      conversations (id, status, updated_at),
+      leads (id, status, service_category, created_at)
+    `, { count: "exact" })
+    .eq("business_id", businessId);
+
+  if (term) {
+    const escaped = term.replace(/[%_,]/g, "").trim();
+    if (escaped) {
+      query = query.or(`name.ilike.%${escaped}%,phone.ilike.%${escaped}%,email.ilike.%${escaped}%`);
+    }
+  }
+
+  const { data, error, count } = await query
+    .order("created_at", { ascending: false })
+    .range(from, to);
 
   if (error) {
     throw new Error(`Failed to load customers: ${error.message}`);
   }
 
-  return data.map((customer) => {
-    const conversations = Array.isArray(customer.conversations)
-      ? customer.conversations
-      : [];
+  const customers = (data ?? []).map((customer) => {
+    const conversations = Array.isArray(customer.conversations) ? customer.conversations : [];
     const leads = Array.isArray(customer.leads) ? customer.leads : [];
+    const latestConversation = conversations.reduce<string | null>((latest, conversation) => {
+      if (!latest || new Date(conversation.updated_at).getTime() > new Date(latest).getTime()) {
+        return conversation.updated_at;
+      }
+      return latest;
+    }, null);
 
     return {
       id: customer.id,
@@ -42,18 +58,21 @@ export async function getCustomers(businessId: string) {
       email: customer.email ?? "",
       conversationCount: conversations.length,
       leadCount: leads.length,
-      latestConversation:
-        conversations.length > 0
-          ? conversations.sort(
-              (a, b) =>
-                new Date(b.updated_at).getTime() -
-                new Date(a.updated_at).getTime()
-            )[0]?.updated_at ?? null
-          : null,
+      latestConversation,
       createdAt: customer.created_at,
       updatedAt: customer.updated_at
     };
   });
+
+  return {
+    customers,
+    pagination: {
+      page: safePage,
+      limit: safeLimit,
+      total: count ?? 0,
+      totalPages: Math.ceil((count ?? 0) / safeLimit)
+    }
+  };
 }
 
 export async function getCustomerById(id: string, businessId: string) {
@@ -66,29 +85,15 @@ export async function getCustomerById(id: string, businessId: string) {
       email,
       created_at,
       updated_at,
-      conversations (
-        id,
-        status,
-        updated_at
-      ),
-      leads (
-        id,
-        status,
-        service_category,
-        created_at
-      )
+      conversations (id, status, updated_at),
+      leads (id, status, service_category, created_at)
     `)
     .eq("id", id)
     .eq("business_id", businessId)
     .maybeSingle();
 
-  if (error) {
-    throw new Error(`Failed to load customer: ${error.message}`);
-  }
-
-  if (!data) {
-    return null;
-  }
+  if (error) throw new Error(`Failed to load customer: ${error.message}`);
+  if (!data) return null;
 
   return {
     id: data.id,
