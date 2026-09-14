@@ -4,13 +4,12 @@ import {
   parseWhatsAppWebhook,
   processIncomingWhatsAppMessage
 } from "../services/whatsapp.js";
-import { verifyMetaSignature } from "../server.js";
+import { verifyMetaSignature } from "../services/meta-signature.js";
 
 const router = Router();
 
 router.get("/status", (_req: Request, res: Response) => {
   const config = getWhatsAppConfig();
-
   res.json({
     channel: "whatsapp",
     configured: config.configured,
@@ -44,25 +43,20 @@ router.get("/webhook", (req: Request, res: Response) => {
 });
 
 router.post("/webhook", async (req: Request, res: Response) => {
-  const appSecret = process.env.WHATSAPP_APP_SECRET?.trim();
-
-  if (appSecret && !verifyMetaSignature(req)) {
+  if (process.env.WHATSAPP_APP_SECRET?.trim() && !verifyMetaSignature(req)) {
     res.status(401).json({ message: "Invalid webhook signature." });
     return;
   }
 
   try {
     const incomingMessages = parseWhatsAppWebhook(req.body);
-
     if (incomingMessages.length === 0) {
       res.sendStatus(200);
       return;
     }
 
     const config = getWhatsAppConfig();
-    const businessId = config.businessId;
-
-    if (!businessId) {
+    if (!config.businessId) {
       console.warn("WhatsApp webhook received without a business mapping.");
       res.status(503).json({
         message: "WhatsApp webhook is ready, but the business mapping is not configured."
@@ -70,13 +64,11 @@ router.post("/webhook", async (req: Request, res: Response) => {
       return;
     }
 
-    const configuredPhoneNumberId = config.phoneNumberId;
-
     for (const incoming of incomingMessages) {
       if (
-        configuredPhoneNumberId &&
+        config.phoneNumberId &&
         incoming.phoneNumberId &&
-        incoming.phoneNumberId !== configuredPhoneNumberId
+        incoming.phoneNumberId !== config.phoneNumberId
       ) {
         console.warn("Ignoring WhatsApp message for an unknown phone number ID.", {
           received: incoming.phoneNumberId
@@ -84,8 +76,7 @@ router.post("/webhook", async (req: Request, res: Response) => {
         continue;
       }
 
-      const result = await processIncomingWhatsAppMessage(businessId, incoming);
-
+      const result = await processIncomingWhatsAppMessage(config.businessId, incoming);
       console.log("Processed WhatsApp message", {
         messageId: incoming.messageId,
         from: incoming.from,
