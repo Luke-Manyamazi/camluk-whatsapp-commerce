@@ -1,9 +1,10 @@
-import { Router, Request, Response } from "express";
+import { Router, type Request, type Response } from "express";
 import {
   getWhatsAppConfig,
   parseWhatsAppWebhook,
   processIncomingWhatsAppMessage
 } from "../services/whatsapp.js";
+import { verifyMetaSignature } from "../server.js";
 
 const router = Router();
 
@@ -34,11 +35,7 @@ router.get("/webhook", (req: Request, res: Response) => {
     return;
   }
 
-  if (
-    mode === "subscribe" &&
-    token === verifyToken &&
-    typeof challenge === "string"
-  ) {
+  if (mode === "subscribe" && token === verifyToken && typeof challenge === "string") {
     res.status(200).send(challenge);
     return;
   }
@@ -47,8 +44,14 @@ router.get("/webhook", (req: Request, res: Response) => {
 });
 
 router.post("/webhook", async (req: Request, res: Response) => {
+  const appSecret = process.env.WHATSAPP_APP_SECRET?.trim();
+
+  if (appSecret && !verifyMetaSignature(req)) {
+    res.status(401).json({ message: "Invalid webhook signature." });
+    return;
+  }
+
   try {
-    // Meta expects a fast 200 response. The payload is processed after basic parsing.
     const incomingMessages = parseWhatsAppWebhook(req.body);
 
     if (incomingMessages.length === 0) {
@@ -60,11 +63,9 @@ router.post("/webhook", async (req: Request, res: Response) => {
     const businessId = config.businessId;
 
     if (!businessId) {
-      console.warn(
-        "WhatsApp webhook received, but WHATSAPP_BUSINESS_ID is not configured."
-      );
+      console.warn("WhatsApp webhook received without a business mapping.");
       res.status(503).json({
-        message: "WhatsApp webhook is ready, but the business mapping is still a placeholder."
+        message: "WhatsApp webhook is ready, but the business mapping is not configured."
       });
       return;
     }
@@ -83,10 +84,7 @@ router.post("/webhook", async (req: Request, res: Response) => {
         continue;
       }
 
-      const result = await processIncomingWhatsAppMessage(
-        businessId,
-        incoming
-      );
+      const result = await processIncomingWhatsAppMessage(businessId, incoming);
 
       console.log("Processed WhatsApp message", {
         messageId: incoming.messageId,
@@ -99,9 +97,7 @@ router.post("/webhook", async (req: Request, res: Response) => {
     res.sendStatus(200);
   } catch (error) {
     console.error("Failed to process WhatsApp webhook:", error);
-    res.status(500).json({
-      message: "Failed to process WhatsApp webhook."
-    });
+    res.status(500).json({ message: "Failed to process WhatsApp webhook." });
   }
 });
 
