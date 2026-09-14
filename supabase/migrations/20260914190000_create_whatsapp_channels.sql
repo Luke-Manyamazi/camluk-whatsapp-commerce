@@ -13,16 +13,11 @@ create table if not exists whatsapp_channels (
     unique (business_id, name)
 );
 
-create index if not exists idx_whatsapp_channels_business
-    on whatsapp_channels(business_id);
+create index if not exists idx_whatsapp_channels_business on whatsapp_channels(business_id);
+create index if not exists idx_whatsapp_channels_active on whatsapp_channels(phone_number_id) where active = true;
 
-create index if not exists idx_whatsapp_channels_active
-    on whatsapp_channels(phone_number_id)
-    where active = true;
+alter table conversations add column if not exists whatsapp_channel_id uuid references whatsapp_channels(id) on delete set null;
+alter table messages add column if not exists whatsapp_channel_id uuid references whatsapp_channels(id) on delete set null;
 
-alter table messages
-    add column if not exists whatsapp_channel_id uuid references whatsapp_channels(id) on delete set null;
-
-create index if not exists idx_messages_whatsapp_channel
-    on messages(whatsapp_channel_id)
-    where whatsapp_channel_id is not null;
+create index if not exists idx_conversations_whatsapp_channel on conversations(whatsapp_channel_id) where whatsapp_channel_id is not null;
+create index if not exists idx_messages_whatsapp_channel on messages(whatsapp_channel_id) where whatsapp_channel_id is not null;
