@@ -1,0 +1,78 @@
+import crypto from "node:crypto";
+import { supabase } from "../lib/supabase.js";
+
+const ALGORITHM = "aes-256-gcm";
+const IV_LENGTH = 12;
+const TAG_LENGTH = 16;
+
+function encryptionKey(): Buffer {
+  const raw = process.env.WHATSAPP_CREDENTIAL_ENCRYPTION_KEY?.trim();
+  if (!raw) throw new Error("WHATSAPP_CREDENTIAL_ENCRYPTION_KEY is not configured");
+  const key = Buffer.from(raw, "base64");
+  if (key.length !== 32) throw new Error("WHATSAPP_CREDENTIAL_ENCRYPTION_KEY must be a base64-encoded 32-byte key");
+  return key;
+}
+
+export function encryptWhatsAppSecret(value: string): string {
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv(ALGORITHM, encryptionKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(value, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `${iv.toString("base64url")}.${tag.toString("base64url")}.${encrypted.toString("base64url")}`;
+}
+
+export function decryptWhatsAppSecret(value: string): string {
+  const [ivEncoded, tagEncoded, dataEncoded] = value.split(".");
+  if (!ivEncoded || !tagEncoded || !dataEncoded) throw new Error("Invalid encrypted WhatsApp secret");
+  const decipher = crypto.createDecipheriv(ALGORITHM, encryptionKey(), Buffer.from(ivEncoded, "base64url"));
+  decipher.setAuthTag(Buffer.from(tagEncoded, "base64url"));
+  return Buffer.concat([decipher.update(Buffer.from(dataEncoded, "base64url")), decipher.final()]).toString("utf8");
+}
+
+export type WhatsAppChannel = {
+  id: string;
+  businessId: string;
+  name: string;
+  whatsappBusinessAccountId: string;
+  phoneNumberId: string;
+  accessToken: string;
+  verifyToken: string;
+  graphApiVersion: string;
+  active: boolean;
+};
+
+type ChannelRow = {
+  id: string;
+  business_id: string;
+  name: string;
+  whatsapp_business_account_id: string;
+  phone_number_id: string;
+  access_token_encrypted: string;
+  verify_token_encrypted: string;
+  graph_api_version: string;
+  active: boolean;
+};
+
+function mapChannel(row: ChannelRow): WhatsAppChannel {
+  return { id: row.id, businessId: row.business_id, name: row.name, whatsappBusinessAccountId: row.whatsapp_business_account_id, phoneNumberId: row.phone_number_id, accessToken: decryptWhatsAppSecret(row.access_token_encrypted), verifyToken: decryptWhatsAppSecret(row.verify_token_encrypted), graphApiVersion: row.graph_api_version, active: row.active };
+}
+
+export async function getWhatsAppChannelByPhoneNumberId(phoneNumberId: string): Promise<WhatsAppChannel | null> {
+  const { data, error } = await supabase.from("whatsapp_channels").select("*").eq("phone_number_id", phoneNumberId).eq("active", true).maybeSingle();
+  if (error) throw new Error(`Failed to resolve WhatsApp channel: ${error.message}`);
+  return data ? mapChannel(data as ChannelRow) : null;
+}
+
+export async function getWhatsAppChannelForBusiness(businessId: string, channelId?: string): Promise<WhatsAppChannel | null> {
+  let query = supabase.from("whatsapp_channels").select("*").eq("business_id", businessId).eq("active", true);
+  if (channelId) query = query.eq("id", channelId);
+  const { data, error } = await query.order("created_at", { ascending: true }).limit(1).maybeSingle();
+  if (error) throw new Error(`Failed to load WhatsApp channel: ${error.message}`);
+  return data ? mapChannel(data as ChannelRow) : null;
+}
+
+export async function createWhatsAppChannel(input: { businessId: string; name: string; whatsappBusinessAccountId: string; phoneNumberId: string; accessToken: string; verifyToken: string; graphApiVersion?: string }) {
+  const { data, error } = await supabase.from("whatsapp_channels").insert({ business_id: input.businessId, name: input.name.trim(), whatsapp_business_account_id: input.whatsappBusinessAccountId.trim(), phone_number_id: input.phoneNumberId.trim(), access_token_encrypted: encryptWhatsAppSecret(input.accessToken.trim()), verify_token_encrypted: encryptWhatsAppSecret(input.verifyToken.trim()), graph_api_version: input.graphApiVersion?.trim() || "v23.0" }).select("id,business_id,name,whatsapp_business_account_id,phone_number_id,graph_api_version,active,created_at,updated_at").single();
+  if (error) throw new Error(`Failed to create WhatsApp channel: ${error.message}`);
+  return data;
+}
