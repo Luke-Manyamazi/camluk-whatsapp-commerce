@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getMessages, createMessage } from "../services/messages.js";
+import { getMessages, createMessage, retryFailedMessage } from "../services/messages.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
 
 const router = Router();
@@ -28,6 +28,20 @@ router.post("/:conversationId", requireAuth, async (req: AuthenticatedRequest, r
     const safeMessage = error instanceof Error && error.message === "WhatsApp sending is not configured yet."
       ? error.message
       : "Failed to send message.";
+    res.status(500).json({ message: safeMessage });
+  }
+});
+
+router.post("/:conversationId/:messageId/retry", requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const message = await retryFailedMessage(req.params.conversationId, req.params.messageId, req.auth!.businessId);
+    if (!message) return res.status(404).json({ message: "Failed outbound message not found." });
+    res.json({ message });
+  } catch (error) {
+    console.error("Failed to retry message:", error);
+    const safeMessage = error instanceof Error && error.message === "WhatsApp sending is not configured yet."
+      ? error.message
+      : "Failed to retry message.";
     res.status(500).json({ message: safeMessage });
   }
 });
