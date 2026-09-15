@@ -6,13 +6,8 @@ const router = Router();
 const MAX_MESSAGE_LENGTH = 4096;
 
 router.get("/:conversationId", requireAuth, async (req: AuthenticatedRequest, res) => {
-  try {
-    const messages = await getMessages(req.params.conversationId, req.auth!.businessId);
-    res.json({ messages });
-  } catch (error) {
-    console.error("Failed to load messages:", error);
-    res.status(500).json({ message: "Failed to load messages." });
-  }
+  try { const messages = await getMessages(String(req.params.conversationId), req.auth!.businessId); res.json({ messages }); }
+  catch (error) { console.error("Failed to load messages:", error); res.status(500).json({ message: "Failed to load messages." }); }
 });
 
 router.post("/:conversationId", requireAuth, async (req: AuthenticatedRequest, res) => {
@@ -20,28 +15,24 @@ router.post("/:conversationId", requireAuth, async (req: AuthenticatedRequest, r
   if (typeof content !== "string" || !content.trim()) return res.status(400).json({ message: "Message content is required." });
   if (content.trim().length > MAX_MESSAGE_LENGTH) return res.status(400).json({ message: `Message cannot exceed ${MAX_MESSAGE_LENGTH} characters.` });
   try {
-    const message = await createMessage(req.params.conversationId, req.auth!.businessId, content);
+    const message = await createMessage(String(req.params.conversationId), req.auth!.businessId, content);
     if (!message) return res.status(404).json({ message: "Conversation not found." });
     res.status(201).json({ message });
   } catch (error) {
     console.error("Failed to create message:", error);
-    const safeMessage = error instanceof Error && error.message === "WhatsApp sending is not configured yet."
-      ? error.message
-      : "Failed to send message.";
+    const safeMessage = error instanceof Error && error.message === "WhatsApp sending is not configured yet." ? error.message : "Failed to send message.";
     res.status(500).json({ message: safeMessage });
   }
 });
 
 router.post("/:conversationId/:messageId/retry", requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
-    const message = await retryFailedMessage(req.params.conversationId, req.params.messageId, req.auth!.businessId);
+    const message = await retryFailedMessage(String(req.params.conversationId), String(req.params.messageId), req.auth!.businessId);
     if (!message) return res.status(404).json({ message: "Failed outbound message not found." });
     res.json({ message });
   } catch (error) {
     console.error("Failed to retry message:", error);
-    const safeMessage = error instanceof Error && error.message === "WhatsApp sending is not configured yet."
-      ? error.message
-      : "Failed to retry message.";
+    const safeMessage = error instanceof Error && error.message === "WhatsApp sending is not configured yet." ? error.message : "Failed to retry message.";
     res.status(500).json({ message: safeMessage });
   }
 });
