@@ -10,7 +10,8 @@
   "scripts": {
     "dev": "npm run dev --workspace=web",
     "dev:api": "npm run dev --workspace=@camluk/api",
-    "build": "npm run build --workspaces",
+    "build": "npm install --include=dev && npm run build --workspace=web",
+    "start": "npm start --workspace=web",
     "lint": "npm run lint --workspaces",
     "test": "npm run test --workspaces"
   },
