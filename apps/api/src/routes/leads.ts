@@ -17,7 +17,7 @@ router.get("/", requireAuth, async (req: AuthenticatedRequest, res) => {
   } catch (error) { console.error("Failed to load leads:", error); res.status(500).json({ message: "Failed to load leads." }); }
 });
 
-router.get("/:id", requireAuth, async (req: AuthenticatedRequest, res) => { try { const lead = await getLeadById(req.params.id, req.auth!.businessId); if (!lead) return res.status(404).json({ message: "Lead not found." }); res.json({ lead }); } catch (error) { console.error("Failed to load lead:", error); res.status(500).json({ message: "Failed to load lead." }); } });
+router.get("/:id", requireAuth, async (req: AuthenticatedRequest, res) => { try { const lead = await getLeadById(String(req.params.id), req.auth!.businessId); if (!lead) return res.status(404).json({ message: "Lead not found." }); res.json({ lead }); } catch (error) { console.error("Failed to load lead:", error); res.status(500).json({ message: "Failed to load lead." }); } });
 
 router.post("/", requireAuth, async (req: AuthenticatedRequest, res) => {
   const { customerId, serviceCategory, notes } = req.body ?? {};
@@ -32,7 +32,7 @@ router.patch("/:id", requireAuth, async (req: AuthenticatedRequest, res) => {
   if (status !== undefined && !leadStatuses.includes(status)) return res.status(400).json({ message: "Invalid lead status." });
   if (serviceCategory !== undefined && serviceCategory !== null && !serviceCategories.includes(serviceCategory)) return res.status(400).json({ message: "Invalid service category." });
   if (notes !== undefined && typeof notes !== "string") return res.status(400).json({ message: "notes must be a string." });
-  try { const lead = await updateLead(req.params.id, req.auth!.businessId, { status, serviceCategory, notes }); if (!lead) return res.status(404).json({ message: "Lead not found." }); res.json({ lead }); } catch (error) { console.error("Failed to update lead:", error); res.status(500).json({ message: "Failed to update lead." }); }
+  try { const lead = await updateLead(String(req.params.id), req.auth!.businessId, { status, serviceCategory, notes }); if (!lead) return res.status(404).json({ message: "Lead not found." }); res.json({ lead }); } catch (error) { console.error("Failed to update lead:", error); res.status(500).json({ message: "Failed to update lead." }); }
 });
 
 export default router;
