@@ -18,7 +18,7 @@ router.get("/", requireAuth, async (req: AuthenticatedRequest, res) => {
 
 router.get("/:id", requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
-    const customer = await getCustomerById(req.params.id, req.auth!.businessId);
+    const customer = await getCustomerById(String(req.params.id), req.auth!.businessId);
     if (!customer) {
       res.status(404).json({ message: "Customer not found." });
       return;
@@ -37,7 +37,7 @@ router.put("/:id", requireAuth, async (req: AuthenticatedRequest, res) => {
       res.status(400).json({ message: "Tags must be an array of strings." });
       return;
     }
-    const customer = await updateCustomer(req.params.id, req.auth!.businessId, {
+    const customer = await updateCustomer(String(req.params.id), req.auth!.businessId, {
       name: typeof body.name === "string" ? body.name : undefined,
       phone: typeof body.phone === "string" ? body.phone : undefined,
       email: typeof body.email === "string" ? body.email : undefined,
