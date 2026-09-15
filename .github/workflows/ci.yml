@@ -8,9 +8,14 @@ on:
   pull_request:
     branches:
       - main
+      - feature/camluk-dashboard
+
+permissions:
+  contents: read
 
 jobs:
   validate:
+    name: Build, test and security checks
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -35,3 +40,9 @@ jobs:
 
       - name: Build web
         run: npm run build --workspace=web
+
+      - name: Run API tests
+        run: npm run test --workspace=@camluk/api
+
+      - name: Dependency security audit
+        run: npm audit --audit-level=high
