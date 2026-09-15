@@ -1,10 +1,9 @@
 import { supabase } from "@/lib/supabase";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
-
-if (!API_URL) {
-  throw new Error("NEXT_PUBLIC_API_URL is not configured");
-}
+const API_URL = (
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://camluk-whatsapp-commerce-api.onrender.com"
+).replace(/\/$/, "");
 
 export async function apiFetch<T>(
   path: string,
@@ -41,7 +40,7 @@ export async function apiFetch<T>(
         ? data.message || data.error
         : undefined;
 
-    throw new Error(message || "API request failed.");
+    throw new Error(message || `API request failed (${response.status}).`);
   }
 
   return data as T;
