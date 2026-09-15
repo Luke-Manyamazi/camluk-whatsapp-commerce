@@ -1,0 +1,46 @@
+services:
+  - type: web
+    name: camluk-whatsapp-commerce-web
+    runtime: node
+    repo: https://github.com/Luke-Manyamazi/camluk-whatsapp-commerce
+    branch: feature/camluk-dashboard
+    rootDir: apps/web
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm start
+    plan: free
+    region: oregon
+    autoDeploy: true
+    healthCheckPath: /
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        value: https://camluk-whatsapp-commerce-api.onrender.com
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        value: https://fncdtmqowtjhrnhandao.supabase.co
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+
+  - type: web
+    name: camluk-whatsapp-commerce-api
+    runtime: node
+    repo: https://github.com/Luke-Manyamazi/camluk-whatsapp-commerce
+    branch: feature/camluk-dashboard
+    rootDir: .
+    buildCommand: npm ci --include=dev && npm run build --workspace=@camluk/api
+    startCommand: npm start --workspace=@camluk/api
+    plan: free
+    region: oregon
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CORS_ORIGINS
+        value: https://camluk-whatsapp-commerce-web.onrender.com
+      - key: SUPABASE_URL
+        value: https://fncdtmqowtjhrnhandao.supabase.co
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: WHATSAPP_CREDENTIAL_ENCRYPTION_KEY
+        sync: false
+      - key: WHATSAPP_APP_SECRET
+        sync: false
