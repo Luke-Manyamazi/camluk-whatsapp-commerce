@@ -1,0 +1,12 @@
+import type { NextFunction, Request, Response } from "express";
+
+interface Bucket { count:number; resetAt:number; }
+const buckets=new Map<string,Bucket>();
+const CLEANUP_INTERVAL=60_000;
+let lastCleanup=0;
+function cleanup(now:number){if(now-lastCleanup<CLEANUP_INTERVAL)return;lastCleanup=now;for(const[key,bucket]of buckets){if(bucket.resetAt<=now)buckets.delete(key);}}
+function rateLimit(windowMs:number,max:number,keyPrefix:string){return(req:Request,res:Response,next:NextFunction):void=>{if(keyPrefix==="api"&&req.path.startsWith("/whatsapp/webhook")){next();return;}const now=Date.now();cleanup(now);const key=`${keyPrefix}:${req.ip||req.socket.remoteAddress||"unknown"}`;const current=buckets.get(key);const bucket=!current||current.resetAt<=now?{count:0,resetAt:now+windowMs}:current;bucket.count+=1;buckets.set(key,bucket);res.setHeader("X-RateLimit-Limit",max);res.setHeader("X-RateLimit-Remaining",Math.max(0,max-bucket.count));res.setHeader("X-RateLimit-Reset",Math.ceil(bucket.resetAt/1000));if(bucket.count>max){res.status(429).json({error:"Too Many Requests",message:"Too many requests. Please try again later."});return;}next();};}
+export const apiRateLimit=rateLimit(60_000,120,"api");
+export const webhookRateLimit=rateLimit(60_000,300,"webhook");
+export function securityHeaders(_req:Request,res:Response,next:NextFunction):void{res.setHeader("X-Content-Type-Options","nosniff");res.setHeader("X-Frame-Options","DENY");res.setHeader("Referrer-Policy","strict-origin-when-cross-origin");res.setHeader("Permissions-Policy","camera=(), microphone=(), geolocation=()");res.setHeader("Cross-Origin-Resource-Policy","same-site");if(process.env.NODE_ENV==="production")res.setHeader("Strict-Transport-Security","max-age=31536000; includeSubDomains");next();}
+export function validateProductionSecurityConfig():void{if(process.env.NODE_ENV!=="production")return;const cors=(process.env.CORS_ORIGINS||"").split(",").map(value=>value.trim()).filter(Boolean);if(cors.length===0)throw new Error("CORS_ORIGINS must be configured in production.");if(cors.some(origin=>origin.includes("localhost")||origin.includes("127.0.0.1")))throw new Error("CORS_ORIGINS must not include localhost in production.");if(!process.env.WHATSAPP_APP_SECRET?.trim())console.warn("WHATSAPP_APP_SECRET is not configured; WhatsApp production webhooks will be rejected.");if(!process.env.WHATSAPP_CREDENTIAL_ENCRYPTION_KEY?.trim())throw new Error("WHATSAPP_CREDENTIAL_ENCRYPTION_KEY must be configured in production.");}

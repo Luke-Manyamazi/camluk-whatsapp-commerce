@@ -1,0 +1,38 @@
+import { Router } from "express";
+import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
+import { createAutomationRule, deleteAutomationRule, duplicateAutomationRule, getAutomationRuleById, getAutomationRules, updateAutomationRule } from "../services/automation.js";
+import { evaluateAutomationRules } from "../services/automation-engine.js";
+import { executeAutomationAction } from "../services/automation-actions.js";
+import { supabase } from "../lib/supabase.js";
+
+const router = Router();
+const validMatchTypes = ["any", "all", "exact", "contains"] as const;
+const validActionTypes = ["send_reply", "create_lead", "update_lead", "change_status", "add_tag", "human_handoff"] as const;
+
+router.post("/test", requireAuth, async (req: AuthenticatedRequest, res) => {
+  try { const { message } = req.body; if (typeof message !== "string" || !message.trim()) return res.status(400).json({ error:"Bad Request", message:"Message is required." }); const result=await evaluateAutomationRules(req.auth!.businessId,message); res.json({input:message,...result}); }
+  catch(error){console.error("Failed to test automation rules:",error);res.status(500).json({error:"Internal Server Error",message:"Failed to evaluate automation rules."});}
+});
+
+router.post("/execute", requireAuth, async (req: AuthenticatedRequest, res) => {
+  try { const { message, customerId, conversationId, messageId }=req.body; if(typeof message!=="string"||!message.trim())return res.status(400).json({error:"Bad Request",message:"Message is required."}); const match=await evaluateAutomationRules(req.auth!.businessId,message); if(!match.matched){const{error:logError}=await supabase.from("automation_logs").insert({business_id:req.auth!.businessId,conversation_id:conversationId??null,message_id:messageId??null,input_text:message,matched:false});if(logError)console.error("Failed to write automation log:",logError);return res.json({input:message,matched:false,actionExecuted:false,result:{message:"No automation rule matched."}});} const actionResult=await executeAutomationAction(match,{businessId:req.auth!.businessId,customerId,conversationId,messageId,inputText:message});const{error:logError}=await supabase.from("automation_logs").insert({business_id:req.auth!.businessId,rule_id:match.rule?.id??null,conversation_id:conversationId??null,message_id:messageId??null,input_text:message,matched:true,response_text:match.responseText,action_type:match.actionType,action_result:actionResult.result});if(logError)console.error("Failed to write automation log:",logError);res.json({input:message,matched:true,rule:match.rule,responseText:match.responseText,actionType:match.actionType,actionExecuted:actionResult.success,actionResult}); }
+  catch(error){console.error("Failed to execute automation:",error);res.status(500).json({error:"Internal Server Error",message:"Failed to execute automation."});}
+});
+
+router.get("/rules", requireAuth, async (req: AuthenticatedRequest, res) => { try{res.json({rules:await getAutomationRules(req.auth!.businessId)});}catch(error){console.error("Failed to fetch automation rules:",error);res.status(500).json({error:"Internal Server Error",message:"Failed to fetch automation rules."});} });
+router.get("/rules/:id", requireAuth, async (req: AuthenticatedRequest, res) => { try{const rule=await getAutomationRuleById(String(req.params.id),req.auth!.businessId);if(!rule)return res.status(404).json({error:"Not Found",message:"Automation rule not found."});res.json({rule});}catch(error){console.error("Failed to fetch automation rule:",error);res.status(500).json({error:"Internal Server Error",message:"Failed to fetch automation rule."});} });
+
+router.post("/rules", requireAuth, async (req: AuthenticatedRequest, res) => {
+  try { const {name,description,enabled,priority,matchType,keywords,responseText,actionType,actionConfig}=req.body;if(typeof name!=="string"||!name.trim())return res.status(400).json({error:"Bad Request",message:"Rule name is required."});if(!Array.isArray(keywords)||keywords.some((k:unknown)=>typeof k!=="string"||!k.trim()))return res.status(400).json({error:"Bad Request",message:"Keywords must be a non-empty array of strings."});if(matchType!==undefined&&!validMatchTypes.includes(matchType))return res.status(400).json({error:"Bad Request",message:"Invalid match type."});if(actionType!==undefined&&!validActionTypes.includes(actionType))return res.status(400).json({error:"Bad Request",message:"Invalid action type."});const rule=await createAutomationRule({businessId:req.auth!.businessId,name:name.trim(),description:typeof description==="string"?description.trim():null,enabled:typeof enabled==="boolean"?enabled:true,priority:typeof priority==="number"?priority:0,matchType,keywords:keywords.map((k:string)=>k.trim()),responseText:typeof responseText==="string"?responseText.trim():null,actionType,actionConfig:actionConfig&&typeof actionConfig==="object"?actionConfig:{}});res.status(201).json({rule}); }
+  catch(error){console.error("Failed to create automation rule:",error);res.status(500).json({error:"Internal Server Error",message:"Failed to create automation rule."});}
+});
+
+router.post("/rules/:id/duplicate", requireAuth, async (req: AuthenticatedRequest, res) => { try{const rule=await duplicateAutomationRule(String(req.params.id),req.auth!.businessId);if(!rule)return res.status(404).json({error:"Not Found",message:"Automation rule not found."});res.status(201).json({rule});}catch(error){console.error("Failed to duplicate automation rule:",error);res.status(500).json({error:"Internal Server Error",message:"Failed to duplicate automation rule."});} });
+
+router.patch("/rules/:id", requireAuth, async (req: AuthenticatedRequest, res) => {
+  try { const{name,description,enabled,priority,matchType,keywords,responseText,actionType,actionConfig}=req.body;if(name!==undefined&&(typeof name!=="string"||!name.trim()))return res.status(400).json({error:"Bad Request",message:"Rule name cannot be empty."});if(keywords!==undefined&&(!Array.isArray(keywords)||keywords.some((k:unknown)=>typeof k!=="string"||!k.trim())))return res.status(400).json({error:"Bad Request",message:"Keywords must be an array of non-empty strings."});if(matchType!==undefined&&!validMatchTypes.includes(matchType))return res.status(400).json({error:"Bad Request",message:"Invalid match type."});if(actionType!==undefined&&!validActionTypes.includes(actionType))return res.status(400).json({error:"Bad Request",message:"Invalid action type."});const rule=await updateAutomationRule(String(req.params.id),req.auth!.businessId,{name:typeof name==="string"?name.trim():undefined,description:typeof description==="string"?description.trim():description,enabled,priority,matchType,keywords:Array.isArray(keywords)?keywords.map((k:string)=>k.trim()):undefined,responseText:typeof responseText==="string"?responseText.trim():responseText,actionType,actionConfig});if(!rule)return res.status(404).json({error:"Not Found",message:"Automation rule not found."});res.json({rule}); }
+  catch(error){console.error("Failed to update automation rule:",error);res.status(500).json({error:"Internal Server Error",message:"Failed to update automation rule."});}
+});
+router.delete("/rules/:id", requireAuth, async (req: AuthenticatedRequest, res) => { try{const rule=await deleteAutomationRule(String(req.params.id),req.auth!.businessId);if(!rule)return res.status(404).json({error:"Not Found",message:"Automation rule not found."});res.json({message:"Automation rule deleted successfully.",rule});}catch(error){console.error("Failed to delete automation rule:",error);res.status(500).json({error:"Internal Server Error",message:"Failed to delete automation rule."});} });
+
+export default router;
