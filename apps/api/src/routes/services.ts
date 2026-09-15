@@ -1,7 +1,6 @@
 import { Router } from "express";
-import { getServices, getServiceById, createService, updateService, deleteService } from "../services/services.js";
-import { requireAuth, requireManager, type AuthenticatedRequest } from "../middleware/auth.js";
-
+import { getServices,getServiceById,createService,updateService,deleteService } from "../services/services.js";
+import { requireAuth,requireManager,type AuthenticatedRequest } from "../middleware/auth.js";
 const router=Router();
 router.get("/",requireAuth,async(req:AuthenticatedRequest,res)=>{try{res.json({services:await getServices(req.auth!.businessId)});}catch(error){console.error("Failed to load services:",error);res.status(500).json({message:"Failed to load services."});}});
 router.get("/:id",requireAuth,async(req:AuthenticatedRequest,res)=>{try{const service=await getServiceById(String(req.params.id),req.auth!.businessId);if(!service)return res.status(404).json({message:"Service not found."});res.json({service});}catch(error){console.error("Failed to load service:",error);res.status(500).json({message:"Failed to load service."});}});

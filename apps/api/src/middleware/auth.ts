@@ -1,12 +1,8 @@
 import type { NextFunction, Request, Response } from "express";
 import { supabase } from "../lib/supabase.js";
-
 export type BusinessRole = "owner" | "admin" | "member";
 export interface AuthContext { userId:string; businessId:string; role:BusinessRole; }
 export interface AuthenticatedRequest extends Request { auth?:AuthContext; }
-
-function getBearerToken(req:Request):string|null{const authorization=req.header("Authorization");if(!authorization)return null;const[scheme,token]=authorization.split(" ");if(scheme?.toLowerCase()!=="bearer"||!token)return null;return token;}
-
+function getBearerToken(req:Request):string|null { const authorization=req.header("Authorization"); if(!authorization)return null; const [scheme,token]=authorization.split(" "); if(scheme?.toLowerCase()!=="bearer"||!token)return null; return token; }
 export async function requireAuth(req:AuthenticatedRequest,res:Response,next:NextFunction):Promise<void>{try{const token=getBearerToken(req);if(!token){res.status(401).json({error:"Unauthorized",message:"A valid Bearer access token is required."});return;}const{data:{user},error:userError}=await supabase.auth.getUser(token);if(userError||!user){res.status(401).json({error:"Unauthorized",message:"The access token is invalid or expired."});return;}const{data:membership,error:membershipError}=await supabase.from("business_memberships").select("business_id, role").eq("user_id",user.id).order("created_at",{ascending:true}).limit(1).maybeSingle();if(membershipError){console.error("Membership lookup failed:",membershipError);res.status(500).json({error:"Internal Server Error",message:"Unable to determine business membership."});return;}if(!membership){res.status(403).json({error:"Forbidden",message:"The authenticated user does not belong to a business."});return;}const role=membership.role as BusinessRole;if(!["owner","admin","member"].includes(role)){res.status(403).json({error:"Forbidden",message:"The user's business role is invalid."});return;}req.auth={userId:user.id,businessId:membership.business_id,role};next();}catch(error){console.error("Authentication middleware failed:",error);res.status(500).json({error:"Internal Server Error",message:"Authentication could not be completed."});}}
-
 export function requireManager(req:AuthenticatedRequest,res:Response,next:NextFunction):void{if(req.auth?.role!=="owner"&&req.auth?.role!=="admin"){res.status(403).json({error:"Forbidden",message:"Only business owners and admins can perform this action."});return;}next();}
