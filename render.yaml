@@ -3,7 +3,7 @@ services:
     name: camluk-whatsapp-commerce-web
     runtime: node
     repo: https://github.com/Luke-Manyamazi/camluk-whatsapp-commerce
-    branch: feature/camluk-dashboard
+    branch: fix/render-deployment-audit
     rootDir: apps/web
     buildCommand: npm install --include=dev && npm run build
     startCommand: npm start
@@ -23,7 +23,7 @@ services:
     name: camluk-whatsapp-commerce-api
     runtime: node
     repo: https://github.com/Luke-Manyamazi/camluk-whatsapp-commerce
-    branch: feature/camluk-dashboard
+    branch: fix/render-deployment-audit
     rootDir: .
     buildCommand: npm ci --include=dev && npm run build --workspace=@camluk/api
     startCommand: npm start --workspace=@camluk/api
