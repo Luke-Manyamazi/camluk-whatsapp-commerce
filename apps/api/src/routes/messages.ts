@@ -6,8 +6,13 @@ const router = Router();
 const MAX_MESSAGE_LENGTH = 4096;
 
 router.get("/:conversationId", requireAuth, async (req: AuthenticatedRequest, res) => {
-  try { const messages = await getMessages(String(req.params.conversationId), req.auth!.businessId); res.json({ messages }); }
-  catch (error) { console.error("Failed to load messages:", error); res.status(500).json({ message: "Failed to load messages." }); }
+  try {
+    const messages = await getMessages(String(req.params.conversationId), req.auth!.businessId);
+    res.json({ messages });
+  } catch (error) {
+    console.error("Failed to load messages:", error);
+    res.status(500).json({ message: "Failed to load messages." });
+  }
 });
 
 router.post("/:conversationId", requireAuth, async (req: AuthenticatedRequest, res) => {
@@ -20,7 +25,9 @@ router.post("/:conversationId", requireAuth, async (req: AuthenticatedRequest, r
     res.status(201).json({ message });
   } catch (error) {
     console.error("Failed to create message:", error);
-    const safeMessage = error instanceof Error && error.message === "WhatsApp sending is not configured yet." ? error.message : "Failed to send message.";
+    const safeMessage = error instanceof Error && error.message === "WhatsApp sending is not configured yet."
+      ? error.message
+      : "Failed to send message.";
     res.status(500).json({ message: safeMessage });
   }
 });
@@ -32,7 +39,9 @@ router.post("/:conversationId/:messageId/retry", requireAuth, async (req: Authen
     res.json({ message });
   } catch (error) {
     console.error("Failed to retry message:", error);
-    const safeMessage = error instanceof Error && error.message === "WhatsApp sending is not configured yet." ? error.message : "Failed to retry message.";
+    const safeMessage = error instanceof Error && error.message === "WhatsApp sending is not configured yet."
+      ? error.message
+      : "Failed to retry message.";
     res.status(500).json({ message: safeMessage });
   }
 });
