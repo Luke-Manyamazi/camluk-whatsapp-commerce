@@ -22,7 +22,7 @@ router.patch("/:conversationId/status", requireAuth, async (req: AuthenticatedRe
   const status = typeof req.body?.status === "string" ? req.body.status : "";
   if (!VALID_STATUSES.has(status)) return res.status(400).json({ message: "Invalid conversation status." });
   try {
-    const conversation = await updateConversationStatus(req.params.conversationId, req.auth!.businessId, status as "open" | "closed" | "human-handoff");
+    const conversation = await updateConversationStatus(String(req.params.conversationId), req.auth!.businessId, status as "open" | "closed" | "human-handoff");
     if (!conversation) return res.status(404).json({ message: "Conversation not found." });
     res.json({ conversation });
   } catch (error) {
@@ -33,7 +33,7 @@ router.patch("/:conversationId/status", requireAuth, async (req: AuthenticatedRe
 
 router.post("/:conversationId/read", requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
-    const conversation = await markConversationRead(req.params.conversationId, req.auth!.businessId);
+    const conversation = await markConversationRead(String(req.params.conversationId), req.auth!.businessId);
     if (!conversation) return res.status(404).json({ message: "Conversation not found." });
     res.json({ conversation });
   } catch (error) {
