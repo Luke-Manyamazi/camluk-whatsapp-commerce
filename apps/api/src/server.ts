@@ -10,6 +10,7 @@ import whatsappRouter from "./routes/whatsapp.js";
 import automationRouter from "./routes/automation.js";
 import settingsRouter from "./routes/settings.js";
 import adminRouter from "./routes/admin.js";
+import onboardingRouter from "./routes/admin-onboarding.js";
 import { requireAuth } from "./middleware/auth.js";
 import { apiRateLimit, securityHeaders, validateProductionSecurityConfig, webhookRateLimit } from "./middleware/security.js";
 
@@ -27,6 +28,7 @@ app.get("/api/auth/test", requireAuth, (req, res) => res.json({ authenticated: t
 app.use("/api/whatsapp/webhook", webhookRateLimit);
 app.use("/api", apiRateLimit);
 app.use("/api/admin", adminRouter);
+app.use("/api/admin/onboarding", onboardingRouter);
 app.use("/api/services", servicesRouter);
 app.use("/api/conversations", conversationsRouter);
 app.use("/api/messages", messagesRouter);
