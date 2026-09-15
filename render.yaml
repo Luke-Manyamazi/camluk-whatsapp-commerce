@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: camluk-whatsapp-commerce-api
+    runtime: node
+    repo: https://github.com/Luke-Manyamazi/camluk-whatsapp-commerce
+    branch: main
+    rootDir: .
+    buildCommand: npm ci --include=dev && npm run build --workspace=@camluk/api
+    startCommand: npm start --workspace=@camluk/api
+    plan: free
+    region: oregon
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CORS_ORIGINS
+        sync: false
+      - key: SUPABASE_URL
+        value: https://fncdtmqowtjhrnhandao.supabase.co
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: WHATSAPP_CREDENTIAL_ENCRYPTION_KEY
+        sync: false
+      - key: WHATSAPP_APP_SECRET
+        sync: false
