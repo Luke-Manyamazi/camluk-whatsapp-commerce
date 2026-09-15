@@ -1,0 +1,1 @@
+Platform support console placeholder for future browser tests.
