@@ -7,9 +7,20 @@ export interface AuthenticatedRequest extends Request { auth?:AuthContext; }
 
 function getBearerToken(req:Request):string|null { const authorization=req.header("Authorization"); if(!authorization)return null; const [scheme,token]=authorization.split(" "); if(scheme?.toLowerCase()!=="bearer"||!token)return null; return token; }
 
-function getRequestedBusinessId(req:Request):string|null {
+export function getRequestedBusinessId(req:Request):string|null {
   const value=req.header("X-Business-Id")?.trim();
   return value || null;
+}
+
+export function isValidBusinessRole(role:unknown):role is BusinessRole {
+  return role === "owner" || role === "admin" || role === "member";
+}
+
+export function membershipMatchesRequestedBusiness(
+  membership: { business_id: string } | null | undefined,
+  requestedBusinessId: string | null,
+): boolean {
+  return Boolean(membership && (!requestedBusinessId || membership.business_id === requestedBusinessId));
 }
 
 export async function requireAuth(req:AuthenticatedRequest,res:Response,next:NextFunction):Promise<void>{
@@ -25,8 +36,8 @@ export async function requireAuth(req:AuthenticatedRequest,res:Response,next:Nex
     const{data:membership,error:membershipError}=await membershipQuery.order("created_at",{ascending:true}).limit(1).maybeSingle();
 
     if(membershipError){console.error("Membership lookup failed:",membershipError);res.status(500).json({error:"Internal Server Error",message:"Unable to determine business membership."});return;}
-    if(!membership){
-      res.status(requestedBusinessId?403:403).json({error:"Forbidden",message:requestedBusinessId?"You are not a member of the selected business.":"The authenticated user does not belong to a business."});
+    if(!membership || !membershipMatchesRequestedBusiness(membership, requestedBusinessId)){
+      res.status(403).json({error:"Forbidden",message:requestedBusinessId?"You are not a member of the selected business.":"The authenticated user does not belong to a business."});
       return;
     }
 
@@ -36,7 +47,7 @@ export async function requireAuth(req:AuthenticatedRequest,res:Response,next:Nex
     if(business.status!=="active"){res.status(403).json({error:"Business Inactive",message:`This business workspace is ${business.status}. Contact a platform administrator.`});return;}
 
     const role=membership.role as BusinessRole;
-    if(!["owner","admin","member"].includes(role)){res.status(403).json({error:"Forbidden",message:"The user's business role is invalid."});return;}
+    if(!isValidBusinessRole(role)){res.status(403).json({error:"Forbidden",message:"The user's business role is invalid."});return;}
     req.auth={userId:user.id,businessId:membership.business_id,role};
     next();
   }catch(error){console.error("Authentication middleware failed:",error);res.status(500).json({error:"Internal Server Error",message:"Authentication could not be completed."});}
