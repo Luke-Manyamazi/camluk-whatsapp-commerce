@@ -1,18 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { apiFetch, getActiveBusinessId, setActiveBusinessId } from "@/lib/api";
 
 type Business = { id: string; name: string; slug: string; status: string; role: string };
-
 type BusinessesResponse = { businesses: Business[] };
 
 export default function BusinessSwitcher() {
+  const pathname = usePathname();
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (pathname.startsWith("/admin")) {
+      setLoading(false);
+      return;
+    }
+
     let mounted = true;
     void apiFetch<BusinessesResponse>("/api/businesses")
       .then(({ businesses: available }) => {
@@ -42,9 +48,9 @@ export default function BusinessSwitcher() {
       mounted = false;
       window.removeEventListener("camluk:business-changed", onChange);
     };
-  }, []);
+  }, [pathname]);
 
-  if (loading || businesses.length <= 1) return null;
+  if (pathname.startsWith("/admin") || loading || businesses.length <= 1) return null;
 
   function handleChange(value: string) {
     setActiveBusinessId(value);
