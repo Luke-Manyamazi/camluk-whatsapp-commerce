@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -48,14 +49,12 @@ export default function LoginPage() {
 
     const result = await response.json();
 
-    console.log("Authenticated API response:", JSON.stringify(result, null, 2));
-
     if (!response.ok) {
       setError(
         result?.message ||
           "Authentication succeeded, but the API rejected the token.",
       );
-
+      await supabase.auth.signOut();
       setLoading(false);
       return;
     }
@@ -69,13 +68,11 @@ export default function LoginPage() {
       <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-8 shadow-xl">
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-white">Camluk</h1>
-
           <p className="mt-1 text-sm text-slate-400">WhatsApp Commerce</p>
         </div>
 
         <div className="mb-6">
           <h2 className="text-xl font-semibold text-white">Sign in</h2>
-
           <p className="mt-1 text-sm text-slate-400">
             Sign in to access your business dashboard.
           </p>
@@ -83,13 +80,9 @@ export default function LoginPage() {
 
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
-            <label
-              htmlFor="email"
-              className="mb-2 block text-sm font-medium text-slate-300"
-            >
+            <label htmlFor="email" className="mb-2 block text-sm font-medium text-slate-300">
               Email
             </label>
-
             <input
               id="email"
               type="email"
@@ -103,13 +96,9 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label
-              htmlFor="password"
-              className="mb-2 block text-sm font-medium text-slate-300"
-            >
+            <label htmlFor="password" className="mb-2 block text-sm font-medium text-slate-300">
               Password
             </label>
-
             <input
               id="password"
               type="password"
@@ -136,6 +125,12 @@ export default function LoginPage() {
             {loading ? "Signing in..." : "Sign in"}
           </button>
         </form>
+
+        <div className="mt-5 text-center">
+          <Link href="/forgot-password" className="text-sm text-slate-400 underline-offset-4 hover:text-white hover:underline">
+            Forgot your password?
+          </Link>
+        </div>
       </div>
     </main>
   );
