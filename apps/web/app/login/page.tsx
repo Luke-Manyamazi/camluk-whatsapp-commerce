@@ -10,6 +10,8 @@ const API_URL = (
   "https://camluk-whatsapp-commerce-api.onrender.com"
 ).replace(/\/$/, "");
 
+type PlatformMe = { userId: string; role: "super_admin" | "support_admin" };
+
 export default function LoginPage() {
   const router = useRouter();
 
@@ -35,18 +37,32 @@ export default function LoginPage() {
       return;
     }
 
-    if (!data.session?.access_token) {
+    const token = data.session?.access_token;
+
+    if (!token) {
       setError("Authentication succeeded, but no access token was returned.");
       setLoading(false);
       return;
     }
 
-    const response = await fetch(`${API_URL}/api/auth/test`, {
-      headers: {
-        Authorization: `Bearer ${data.session.access_token}`,
-      },
-    });
+    const headers = { Authorization: `Bearer ${token}` };
 
+    // Platform admins are authenticated independently of business membership.
+    // Check this first so a platform admin is taken to /admin instead of the
+    // business workspace.
+    const platformResponse = await fetch(`${API_URL}/api/platform/me`, { headers });
+
+    if (platformResponse.ok) {
+      const platformUser = (await platformResponse.json()) as PlatformMe;
+      if (platformUser.role === "super_admin" || platformUser.role === "support_admin") {
+        router.replace("/admin");
+        router.refresh();
+        return;
+      }
+    }
+
+    // Normal business users still authenticate through business membership.
+    const response = await fetch(`${API_URL}/api/auth/test`, { headers });
     const result = await response.json();
 
     if (!response.ok) {
@@ -74,7 +90,7 @@ export default function LoginPage() {
         <div className="mb-6">
           <h2 className="text-xl font-semibold text-white">Sign in</h2>
           <p className="mt-1 text-sm text-slate-400">
-            Sign in to access your business dashboard.
+            Sign in to access your Camluk workspace.
           </p>
         </div>
 
