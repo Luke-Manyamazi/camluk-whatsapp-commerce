@@ -9,6 +9,7 @@ import customersRouter from "./routes/customers.js";
 import whatsappRouter from "./routes/whatsapp.js";
 import automationRouter from "./routes/automation.js";
 import settingsRouter from "./routes/settings.js";
+import platformRouter from "./routes/platform.js";
 import { requireAuth } from "./middleware/auth.js";
 import { apiRateLimit, securityHeaders, validateProductionSecurityConfig, webhookRateLimit } from "./middleware/security.js";
 
@@ -25,6 +26,7 @@ app.get("/health",(_req,res)=>res.json({status:"ok"}));
 app.get("/api/auth/test",requireAuth,(req,res)=>res.json({authenticated:true,auth:req.auth}));
 app.use("/api/whatsapp/webhook",webhookRateLimit);
 app.use("/api",apiRateLimit);
+app.use("/api/platform",platformRouter);
 app.use("/api/services",servicesRouter);
 app.use("/api/conversations",conversationsRouter);
 app.use("/api/messages",messagesRouter);
