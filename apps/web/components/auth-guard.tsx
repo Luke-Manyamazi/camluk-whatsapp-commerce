@@ -4,13 +4,16 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
+const PUBLIC_PATHS = new Set(["/login", "/forgot-password", "/reset-password"]);
+
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [checking, setChecking] = useState(pathname !== "/login");
+  const isPublicPath = PUBLIC_PATHS.has(pathname);
+  const [checking, setChecking] = useState(!isPublicPath);
 
   useEffect(() => {
-    if (pathname === "/login") {
+    if (PUBLIC_PATHS.has(pathname)) {
       setChecking(false);
       return;
     }
@@ -46,7 +49,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
     };
   }, [pathname, router]);
 
-  if (pathname === "/login" || !checking) {
+  if (isPublicPath || !checking) {
     return <>{children}</>;
   }
 
