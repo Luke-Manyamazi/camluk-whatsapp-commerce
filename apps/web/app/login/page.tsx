@@ -4,6 +4,11 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
+const API_URL = (
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://camluk-whatsapp-commerce-api.onrender.com"
+).replace(/\/$/, "");
+
 export default function LoginPage() {
   const router = useRouter();
 
@@ -29,14 +34,17 @@ export default function LoginPage() {
       return;
     }
 
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/auth/test`,
-      {
-        headers: {
-          Authorization: `Bearer ${data.session.access_token}`,
-        },
+    if (!data.session?.access_token) {
+      setError("Authentication succeeded, but no access token was returned.");
+      setLoading(false);
+      return;
+    }
+
+    const response = await fetch(`${API_URL}/api/auth/test`, {
+      headers: {
+        Authorization: `Bearer ${data.session.access_token}`,
       },
-    );
+    });
 
     const result = await response.json();
 
