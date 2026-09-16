@@ -4,6 +4,7 @@ import type { AuthenticatedRequest } from "./auth.js";
 
 export interface PlatformAdminRequest extends AuthenticatedRequest {
   platformRole?: "super_admin" | "support_admin";
+  platformUserId?: string;
 }
 
 function getBearerToken(req: AuthenticatedRequest): string | null {
@@ -49,7 +50,7 @@ export async function requirePlatformAdmin(
       return;
     }
 
-    req.userId = user.id;
+    req.platformUserId = user.id;
     req.platformRole = admin.role as "super_admin" | "support_admin";
     next();
   } catch (error) {
