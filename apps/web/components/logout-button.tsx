@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { clearActiveBusinessId } from "@/lib/api";
 
 export default function LogoutButton({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
@@ -17,6 +18,7 @@ export default function LogoutButton({ compact = false }: { compact?: boolean })
       return;
     }
 
+    clearActiveBusinessId();
     router.replace("/login");
     router.refresh();
   }
