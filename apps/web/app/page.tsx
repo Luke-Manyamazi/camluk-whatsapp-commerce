@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, getActiveBusinessId } from "@/lib/api";
 import LogoutButton from "@/components/logout-button";
 
 type Service = { id: string; name: string; description: string };
@@ -10,6 +10,7 @@ type Conversation = { id: string; customerName: string; phone: string; lastMessa
 type Lead = { id: string; customerName: string; phone: string; serviceCategory: string | null; status: string; updatedAt: string };
 type Pagination = { page: number; limit: number; total: number; totalPages: number };
 type LeadSummary = { total: number; new: number; contacted: number; qualified: number; converted: number; lost: number };
+type Business = { id: string; name: string; slug: string; status: string; role: string };
 
 type DashboardData = {
   services: Service[];
@@ -52,6 +53,7 @@ function LoadingRows({ label }: { label: string }) {
 
 export default function Home() {
   const [data, setData] = useState<DashboardData>(emptyData);
+  const [business, setBusiness] = useState<Business | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -59,12 +61,18 @@ export default function Home() {
     setLoading(true);
     setError(false);
     try {
-      const [services, conversations, leads, customers] = await Promise.all([
+      const [businesses, services, conversations, leads, customers] = await Promise.all([
+        apiFetch<{ businesses: Business[] }>("/api/businesses"),
         apiFetch<{ services: Service[] }>("/api/services"),
         apiFetch<{ conversations: Conversation[]; pagination: Pagination }>("/api/conversations?page=1&limit=5"),
         apiFetch<{ leads: Lead[]; pagination: Pagination; summary: LeadSummary }>("/api/leads?page=1&limit=5"),
         apiFetch<{ customers: unknown[]; pagination: Pagination }>("/api/customers?page=1&limit=1"),
       ]);
+      const activeId = getActiveBusinessId();
+      const selectedBusiness = businesses.businesses.find((item) => item.id === activeId && item.status === "active")
+        ?? businesses.businesses.find((item) => item.status === "active")
+        ?? null;
+      setBusiness(selectedBusiness);
       setData({
         services: services.services || [],
         conversations: conversations.conversations || [],
@@ -89,10 +97,11 @@ export default function Home() {
     { label: "Customers", value: data.customerTotal, description: "Total customers", href: "/customers" },
     { label: "Open Requests", value: openRequests, description: "Active service requests", href: "/leads" },
   ];
+  const businessName = business?.name || "Your Business";
 
   return <main className="min-h-screen bg-slate-950 text-white"><div className="flex min-h-screen">
-    <aside className="hidden w-64 border-r border-slate-800 bg-slate-900 p-6 md:flex md:flex-col"><div className="mb-10"><h1 className="text-xl font-bold">Camluk</h1><p className="text-sm text-slate-400">WhatsApp Commerce</p></div><nav className="flex-1 space-y-2">{navigation.map(item => <Link key={item.label} href={item.href} className={`block w-full rounded-lg px-4 py-3 text-sm transition ${item.href === "/" ? "bg-white font-medium text-slate-950" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>{item.label}</Link>)}</nav><div className="mt-8 border-t border-slate-800 pt-5"><LogoutButton /></div></aside>
-    <section className="min-w-0 flex-1"><header className="border-b border-slate-800 px-5 py-5 sm:px-6 md:px-10"><div className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-xs font-medium uppercase tracking-wider text-blue-400">Camluk Commerce</p><h2 className="mt-1 text-2xl font-bold">Dashboard</h2><p className="mt-1 text-sm text-slate-400">Manage your WhatsApp business assistant.</p></div><div className="flex items-center gap-3"><div className="rounded-full bg-green-500/10 px-4 py-2 text-sm text-green-400">● System Online</div><div className="md:hidden"><LogoutButton compact /></div></div></div><nav className="mt-5 flex gap-2 overflow-x-auto md:hidden">{navigation.map(item => <Link key={item.label} href={item.href} className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs ${item.href === "/" ? "bg-white font-medium text-slate-950" : "bg-slate-900 text-slate-400"}`}>{item.label}</Link>)}</nav></header>
+    <aside className="hidden w-64 border-r border-slate-800 bg-slate-900 p-6 md:flex md:flex-col"><div className="mb-10"><h1 className="text-xl font-bold">{businessName}</h1><p className="text-sm text-slate-400">WhatsApp Commerce</p></div><nav className="flex-1 space-y-2">{navigation.map(item => <Link key={item.label} href={item.href} className={`block w-full rounded-lg px-4 py-3 text-sm transition ${item.href === "/" ? "bg-white font-medium text-slate-950" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>{item.label}</Link>)}</nav><div className="mt-8 border-t border-slate-800 pt-5"><p className="mb-3 text-xs text-slate-500">Powered by Camluk</p><LogoutButton /></div></aside>
+    <section className="min-w-0 flex-1"><header className="border-b border-slate-800 px-5 py-5 sm:px-6 md:px-10"><div className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-xs font-medium uppercase tracking-wider text-blue-400">{businessName}</p><h2 className="mt-1 text-2xl font-bold">Dashboard</h2><p className="mt-1 text-sm text-slate-400">Manage your WhatsApp business assistant.</p></div><div className="flex items-center gap-3"><div className="rounded-full bg-green-500/10 px-4 py-2 text-sm text-green-400">● System Online</div><div className="md:hidden"><LogoutButton compact /></div></div></div><nav className="mt-5 flex gap-2 overflow-x-auto md:hidden">{navigation.map(item => <Link key={item.label} href={item.href} className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs ${item.href === "/" ? "bg-white font-medium text-slate-950" : "bg-slate-900 text-slate-400"}`}>{item.label}</Link>)}</nav></header>
       <div className="p-5 sm:p-6 md:p-10">
         <div className="mb-8 flex flex-wrap items-end justify-between gap-3"><div><h3 className="text-lg font-semibold">Business overview</h3><p className="mt-1 text-sm text-slate-400">Totals cover the whole business; lists show the latest 5 records.</p></div><button onClick={() => void loadDashboard()} disabled={loading} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50">{loading ? "Refreshing..." : "Refresh"}</button></div>
         {error && <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300"><span>We could not load the latest dashboard data.</span><button onClick={() => void loadDashboard()} className="rounded-lg border border-red-400/30 px-3 py-2 text-xs hover:bg-red-500/10">Try again</button></div>}
